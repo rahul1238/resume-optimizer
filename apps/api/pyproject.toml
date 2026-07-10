@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "resume-optimizer-api"
+version = "0.1.0"
+description = "Backend API for Resume Optimizer"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi[standard]",
+  "pydantic-settings",
+  "google-genai",
+  "firebase-admin",
+  "python-multipart",
+  "PyMuPDF",
+  "python-docx",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "httpx",
+  "ruff",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

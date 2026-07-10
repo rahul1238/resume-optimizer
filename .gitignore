@@ -1,0 +1,8 @@
+.venv/
+.env
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+
+resume-optimizer-51-firebase-adminsdk-fbsvc-322e8bb6ca.json
