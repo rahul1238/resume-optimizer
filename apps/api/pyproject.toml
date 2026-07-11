@@ -9,6 +9,7 @@ description = "Backend API for Resume Optimizer"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+  "boto3",
   "fastapi[standard]",
   "pydantic-settings",
   "google-genai",

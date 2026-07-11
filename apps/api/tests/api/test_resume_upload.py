@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.main import app
+from app.services.resume_storage_service import ResumeStorageService, StoredResume
 
 client = TestClient(app)
 
@@ -25,6 +26,20 @@ def override_authentication() -> None:
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def override_storage(monkeypatch: pytest.MonkeyPatch) -> None:
+    def store_original(**_kwargs: object) -> StoredResume:
+        return StoredResume(
+            resume_id="b6b6b661-144a-4cb7-b0d8-2ce2912e211d",
+            storage_path=(
+                "resumes/test-user-id/b6b6b661-144a-4cb7-b0d8-2ce2912e211d/"
+                "original.pdf"
+            ),
+        )
+
+    monkeypatch.setattr(ResumeStorageService, "store_original", store_original)
+
+
 def test_upload_pdf_extracts_text() -> None:
     document = fitz.open()
     page = document.new_page()
@@ -40,6 +55,8 @@ def test_upload_pdf_extracts_text() -> None:
     assert response.status_code == 200
     assert response.json()["file_type"] == "pdf"
     assert response.json()["page_count"] == 1
+    assert response.json()["resume_id"] == "b6b6b661-144a-4cb7-b0d8-2ce2912e211d"
+    assert response.json()["storage_path"].startswith("resumes/test-user-id/")
     assert "Ada Lovelace" in response.json()["text"]
 
 
@@ -115,3 +132,18 @@ def test_upload_requires_a_firebase_id_token() -> None:
         "detail": "A Firebase ID token is required.",
         "code": "missing_authentication",
     }
+
+
+def test_upload_cors_preflight_allows_the_local_frontend() -> None:
+    response = client.options(
+        "/api/v1/resumes/upload",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert "POST" in response.headers["access-control-allow-methods"]

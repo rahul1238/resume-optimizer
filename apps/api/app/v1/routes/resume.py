@@ -18,6 +18,7 @@ async def upload_resume(
     try:
         content = await file.read(settings.max_resume_upload_bytes + 1)
         parsed_resume = ResumeUploadService.process(
+            owner_uid=current_user.uid,
             filename=file.filename or "resume",
             content=content,
         )
@@ -25,9 +26,11 @@ async def upload_resume(
         await file.close()
 
     return ResumeUploadResponse(
+        resume_id=parsed_resume.resume_id,
         filename=parsed_resume.filename,
         file_type=parsed_resume.file_type,
         page_count=parsed_resume.page_count,
+        storage_path=parsed_resume.storage_path,
         character_count=len(parsed_resume.text),
         text=parsed_resume.text,
     )

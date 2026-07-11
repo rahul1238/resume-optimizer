@@ -4,6 +4,7 @@ from typing import Literal
 
 from app.core.config import settings
 from app.parsers.resume_parser import ResumeParser, ResumeParsingError
+from app.services.resume_storage_service import ResumeStorageService
 
 
 class ResumeUploadError(Exception):
@@ -57,9 +58,11 @@ class ResumeTextNotFoundError(ResumeUploadError):
 
 @dataclass(frozen=True)
 class ParsedResume:
+    resume_id: str
     filename: str
     file_type: Literal["pdf", "docx"]
     page_count: int | None
+    storage_path: str
     text: str
 
 
@@ -67,7 +70,7 @@ class ResumeUploadService:
     allowed_extensions = {".pdf", ".docx"}
 
     @classmethod
-    def process(cls, filename: str, content: bytes) -> ParsedResume:
+    def process(cls, owner_uid: str, filename: str, content: bytes) -> ParsedResume:
         safe_filename = Path(filename).name or "resume"
         extension = Path(safe_filename).suffix.lower()
 
@@ -93,9 +96,18 @@ class ResumeUploadService:
         if not text:
             raise ResumeTextNotFoundError()
 
+        stored_resume = ResumeStorageService.store_original(
+            owner_uid=owner_uid,
+            filename=safe_filename,
+            extension=extension,
+            content=content,
+        )
+
         return ParsedResume(
+            resume_id=stored_resume.resume_id,
             filename=safe_filename,
             file_type=file_type,
             page_count=page_count,
+            storage_path=stored_resume.storage_path,
             text=text,
         )
