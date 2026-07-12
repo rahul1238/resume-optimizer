@@ -10,6 +10,19 @@ from app.services.resume_storage_service import ResumeStorageService
 
 class AnalysisService:
     @staticmethod
+    def list(owner_uid: str, resume_id: str | None = None) -> list[AnalysisRecord]:
+        return AnalysisRepository.list_owned(owner_uid, resume_id)
+
+    @staticmethod
+    def get(owner_uid: str, analysis_id: str) -> AnalysisRecord:
+        return AnalysisRepository.get_owned(analysis_id, owner_uid)
+
+    @staticmethod
+    def delete(owner_uid: str, analysis_id: str) -> None:
+        AnalysisRepository.get_owned(analysis_id, owner_uid)
+        AnalysisRepository.delete(analysis_id)
+
+    @staticmethod
     def analyze(
         owner_uid: str,
         resume_id: str,

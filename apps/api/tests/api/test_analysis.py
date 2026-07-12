@@ -1,9 +1,13 @@
+from datetime import UTC, datetime
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.ai.schemas import ResumeAnalysisResult
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.main import app
+from app.models.analysis import AnalysisRecord
+from app.repositories.analysis_repository import AnalysisNotFoundError
 from app.services.analysis_service import AnalysisService
 
 client = TestClient(app)
@@ -73,3 +77,76 @@ def test_create_analysis_requires_authentication() -> None:
 
     assert response.status_code == 401
     assert response.json()["code"] == "missing_authentication"
+
+
+def stored_analysis() -> AnalysisRecord:
+    return AnalysisRecord(
+        analysis_id="analysis-id",
+        owner_uid="test-user-id",
+        resume_id="resume-id",
+        job_description="Build reliable Python APIs and distributed systems. " * 3,
+        job_title="Backend Engineer",
+        company_name="Example Tech",
+        provider="gemini",
+        model="gemini-3.5-flash",
+        status="completed",
+        result={
+            "match_score": 82,
+            "summary": "Strong alignment.",
+            "strengths": ["Python"],
+            "gaps": ["Kubernetes"],
+            "matched_keywords": ["Python"],
+            "missing_keywords": ["Kubernetes"],
+            "recommendations": ["Add measurable outcomes."],
+        },
+        created_at=datetime(2026, 7, 12, tzinfo=UTC),
+    )
+
+
+def test_list_analyses_returns_compact_summaries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(AnalysisService, "list", lambda *_args: [stored_analysis()])
+
+    response = client.get("/api/v1/analyses?resume_id=resume-id")
+
+    assert response.status_code == 200
+    assert response.json()[0]["match_score"] == 82
+    assert "result" not in response.json()[0]
+    assert "job_description" not in response.json()[0]
+
+
+def test_get_analysis_returns_stored_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(AnalysisService, "get", lambda *_args: stored_analysis())
+
+    response = client.get("/api/v1/analyses/analysis-id")
+
+    assert response.status_code == 200
+    assert response.json()["result"]["match_score"] == 82
+    assert response.json()["job_title"] == "Backend Engineer"
+
+
+def test_delete_analysis_returns_no_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    deleted: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        AnalysisService,
+        "delete",
+        lambda owner_uid, analysis_id: deleted.append((owner_uid, analysis_id)),
+    )
+
+    response = client.delete("/api/v1/analyses/analysis-id")
+
+    assert response.status_code == 204
+    assert deleted == [("test-user-id", "analysis-id")]
+
+
+def test_get_analysis_hides_unowned_records(monkeypatch: pytest.MonkeyPatch) -> None:
+    def not_found(*_args: object) -> AnalysisRecord:
+        raise AnalysisNotFoundError()
+
+    monkeypatch.setattr(AnalysisService, "get", not_found)
+
+    response = client.get("/api/v1/analyses/private-analysis")
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "analysis_not_found"

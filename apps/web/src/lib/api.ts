@@ -49,6 +49,23 @@ export interface AnalysisCreateResponse {
   result: ResumeAnalysisResult;
 }
 
+export interface AnalysisSummary {
+  analysis_id: string;
+  resume_id: string;
+  job_title: string | null;
+  company_name: string | null;
+  match_score: number;
+  status: "completed";
+  provider: string;
+  model: string;
+  created_at: string | null;
+}
+
+export interface AnalysisDetail extends AnalysisSummary {
+  job_description: string;
+  result: ResumeAnalysisResult;
+}
+
 interface ApiErrorBody {
   detail?: string | Array<{ msg?: string }>;
   code?: string;
@@ -153,4 +170,24 @@ export async function createAnalysis(
     body: JSON.stringify(request),
   });
   return response.json();
+}
+
+export async function listAnalyses(resumeId?: string): Promise<AnalysisSummary[]> {
+  const query = resumeId ? `?resume_id=${encodeURIComponent(resumeId)}` : "";
+  const response = await authenticatedRequest(`/api/v1/analyses${query}`);
+  return response.json();
+}
+
+export async function getAnalysis(analysisId: string): Promise<AnalysisDetail> {
+  const response = await authenticatedRequest(
+    `/api/v1/analyses/${encodeURIComponent(analysisId)}`,
+  );
+  return response.json();
+}
+
+export async function deleteAnalysis(analysisId: string): Promise<void> {
+  await authenticatedRequest(
+    `/api/v1/analyses/${encodeURIComponent(analysisId)}`,
+    { method: "DELETE" },
+  );
 }

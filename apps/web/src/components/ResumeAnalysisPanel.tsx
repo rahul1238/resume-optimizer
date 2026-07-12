@@ -1,10 +1,14 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import {
   ApiClientError,
-  AnalysisCreateResponse,
+  AnalysisDetail,
+  AnalysisSummary,
   createAnalysis,
+  deleteAnalysis,
+  getAnalysis,
+  listAnalyses,
 } from "@/lib/api";
 import styles from "./ResumeAnalysisPanel.module.css";
 
@@ -40,9 +44,31 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
   const [jobTitle, setJobTitle] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [jobDescription, setJobDescription] = useState("");
-  const [analysis, setAnalysis] = useState<AnalysisCreateResponse | null>(null);
+  const [analysis, setAnalysis] = useState<AnalysisDetail | null>(null);
+  const [history, setHistory] = useState<AnalysisSummary[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyActionId, setHistoryActionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    listAnalyses(resumeId)
+      .then((items) => {
+        if (active) setHistory(items);
+      })
+      .catch((caught: unknown) => {
+        if (active) {
+          setError(caught instanceof ApiClientError
+            ? caught.message
+            : "Could not load saved analyses.");
+        }
+      })
+      .finally(() => {
+        if (active) setHistoryLoading(false);
+      });
+    return () => { active = false; };
+  }, [resumeId]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -55,7 +81,27 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
         job_title: jobTitle.trim() || undefined,
         company_name: companyName.trim() || undefined,
       });
-      setAnalysis(response);
+      const createdAt = new Date().toISOString();
+      const detail: AnalysisDetail = {
+        ...response,
+        job_title: jobTitle.trim() || null,
+        company_name: companyName.trim() || null,
+        job_description: jobDescription.trim(),
+        match_score: response.result.match_score,
+        created_at: createdAt,
+      };
+      setAnalysis(detail);
+      setHistory((previous) => [{
+        analysis_id: response.analysis_id,
+        resume_id: response.resume_id,
+        job_title: detail.job_title,
+        company_name: detail.company_name,
+        match_score: detail.match_score,
+        status: response.status,
+        provider: response.provider,
+        model: response.model,
+        created_at: createdAt,
+      }, ...previous]);
     } catch (caught: unknown) {
       const message = caught instanceof ApiClientError
         ? ANALYSIS_ERRORS[caught.code] ?? caught.message
@@ -66,10 +112,103 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     }
   };
 
+  const handleOpenAnalysis = async (analysisId: string) => {
+    setError(null);
+    setHistoryActionId(analysisId);
+    try {
+      const detail = await getAnalysis(analysisId);
+      setAnalysis(detail);
+      setJobTitle(detail.job_title ?? "");
+      setCompanyName(detail.company_name ?? "");
+      setJobDescription(detail.job_description);
+    } catch (caught: unknown) {
+      setError(caught instanceof ApiClientError
+        ? caught.message
+        : "Could not open this analysis.");
+    } finally {
+      setHistoryActionId(null);
+    }
+  };
+
+  const handleDeleteAnalysis = async (item: AnalysisSummary) => {
+    if (!window.confirm("Delete this saved analysis?")) return;
+    setError(null);
+    setHistoryActionId(item.analysis_id);
+    try {
+      await deleteAnalysis(item.analysis_id);
+      setHistory((previous) => previous.filter(
+        (entry) => entry.analysis_id !== item.analysis_id,
+      ));
+      if (analysis?.analysis_id === item.analysis_id) setAnalysis(null);
+    } catch (caught: unknown) {
+      setError(caught instanceof ApiClientError
+        ? caught.message
+        : "Could not delete this analysis.");
+    } finally {
+      setHistoryActionId(null);
+    }
+  };
+
+  const historySection = (
+    <section className={styles.historyPanel} aria-labelledby="analysis-history-title">
+      <div className={styles.historyHeader}>
+        <div>
+          <p className={styles.eyebrow}>Previous results</p>
+          <h3 id="analysis-history-title">Analysis history</h3>
+        </div>
+        <span>{history.length}</span>
+      </div>
+      {historyLoading ? (
+        <div className={styles.historyState}>
+          <span className="spinner spinner-sm" /> Loading analyses…
+        </div>
+      ) : history.length === 0 ? (
+        <p className={styles.historyState}>No saved analyses for this resume.</p>
+      ) : (
+        <ul className={styles.historyList}>
+          {history.map((item) => (
+            <li key={item.analysis_id} className={styles.historyItem}>
+              <button
+                type="button"
+                className={styles.historyOpen}
+                onClick={() => handleOpenAnalysis(item.analysis_id)}
+                disabled={historyActionId === item.analysis_id}
+              >
+                <span className={styles.historyScore}>{item.match_score}</span>
+                <span className={styles.historyMeta}>
+                  <strong>{item.job_title || "Untitled job"}</strong>
+                  <small>
+                    {item.company_name || "Company not specified"} · {item.created_at
+                      ? new Date(item.created_at).toLocaleDateString()
+                      : "Saved"}
+                  </small>
+                </span>
+              </button>
+              <button
+                type="button"
+                className={styles.historyDelete}
+                onClick={() => handleDeleteAnalysis(item)}
+                disabled={historyActionId === item.analysis_id}
+                aria-label={`Delete analysis for ${item.job_title || "untitled job"}`}
+                title="Delete analysis"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" />
+                </svg>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+
   if (analysis) {
     const result = analysis.result;
     return (
-      <div className={`${styles.panel} animate-slide-up`}>
+      <>
+        {historySection}
+        <div className={`${styles.panel} animate-slide-up`}>
         <header className={styles.resultHeader}>
           <div className={styles.score} aria-label={`${result.match_score} percent match`}>
             <strong>{result.match_score}</strong>
@@ -77,7 +216,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
           </div>
           <div className={styles.summary}>
             <p className={styles.eyebrow}>Resume analysis</p>
-            <h3>{jobTitle || "Job match"}</h3>
+            <h3>{analysis.job_title || "Job match"}</h3>
             <p>{result.summary}</p>
           </div>
           <button
@@ -85,7 +224,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
             className="btn btn-ghost btn-sm"
             onClick={() => setAnalysis(null)}
           >
-            Edit job
+            New analysis
           </button>
         </header>
 
@@ -121,12 +260,15 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
         <footer className={styles.resultMeta}>
           Analysis ID {analysis.analysis_id.slice(0, 8)} · {analysis.model}
         </footer>
-      </div>
+        </div>
+      </>
     );
   }
 
   return (
-    <div className={styles.panel}>
+    <>
+      {historySection}
+      <div className={styles.panel}>
       <div className={styles.formHeader}>
         <p className={styles.eyebrow}>Next step</p>
         <h3>Compare with a job</h3>
@@ -192,6 +334,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
           </button>
         </div>
       </form>
-    </div>
+      </div>
+    </>
   );
 }

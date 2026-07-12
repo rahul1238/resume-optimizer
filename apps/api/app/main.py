@@ -7,7 +7,10 @@ from starlette.middleware.cors import CORSMiddleware
 from app.ai.provider import AIProviderError
 from app.auth.errors import AuthenticationError
 from app.core.config import settings
-from app.repositories.analysis_repository import AnalysisRepositoryError
+from app.repositories.analysis_repository import (
+    AnalysisNotFoundError,
+    AnalysisRepositoryError,
+)
 from app.repositories.resume_repository import (
     ResumeNotFoundError,
     ResumeRepositoryError,
@@ -114,7 +117,8 @@ async def analysis_service_error_handler(
     request: Request,
     error: AnalysisRepositoryError | AIProviderError,
 ) -> JSONResponse:
-    logger.error(
+    log = logger.warning if isinstance(error, AnalysisNotFoundError) else logger.error
+    log(
         "Analysis request failed: %s %s",
         request.method,
         request.url.path,

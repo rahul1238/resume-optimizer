@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field, field_validator
 
 from app.ai.schemas import ResumeAnalysisResult
@@ -27,4 +29,21 @@ class AnalysisCreateResponse(BaseModel):
     status: str
     provider: str
     model: str
+    result: ResumeAnalysisResult
+
+
+class AnalysisSummaryResponse(BaseModel):
+    analysis_id: str
+    resume_id: str
+    job_title: str | None
+    company_name: str | None
+    match_score: int
+    status: str
+    provider: str
+    model: str
+    created_at: datetime | None
+
+
+class AnalysisDetailResponse(AnalysisSummaryResponse):
+    job_description: str
     result: ResumeAnalysisResult
