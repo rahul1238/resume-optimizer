@@ -14,6 +14,15 @@ export interface ResumeUploadResponse {
   text: string;
 }
 
+export interface ResumeSummary {
+  resume_id: string;
+  filename: string;
+  file_type: "pdf" | "docx";
+  page_count: number | null;
+  character_count: number;
+  created_at: string | null;
+}
+
 export interface ResumeAnalysisResult {
   match_score: number;
   summary: string;
@@ -75,6 +84,31 @@ async function parseError(response: Response): Promise<ApiClientError> {
   );
 }
 
+async function authenticatedRequest(
+  path: string,
+  init?: RequestInit,
+): Promise<Response> {
+  const send = async (forceRefresh = false) => {
+    const user = getAuthInstance().currentUser;
+    if (!user) {
+      throw new ApiClientError("Not authenticated", "missing_authentication", 401);
+    }
+    const token = forceRefresh ? await user.getIdToken(true) : await getBearerToken();
+    return fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: {
+        ...init?.headers,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  };
+
+  let response = await send();
+  if (response.status === 401) response = await send(true);
+  if (!response.ok) throw await parseError(response);
+  return response;
+}
+
 export async function checkHealth(): Promise<{ code: number; status: string }> {
   const res = await fetch(`${API_BASE}/api/v1/health/`);
   if (!res.ok) throw new Error("Health check failed");
@@ -104,6 +138,25 @@ export async function uploadResume(file: File): Promise<ResumeUploadResponse> {
   }
 
   return res.json();
+}
+
+export async function listResumes(): Promise<ResumeSummary[]> {
+  const response = await authenticatedRequest("/api/v1/resumes");
+  return response.json();
+}
+
+export async function getResume(resumeId: string): Promise<ResumeUploadResponse> {
+  const response = await authenticatedRequest(
+    `/api/v1/resumes/${encodeURIComponent(resumeId)}`,
+  );
+  return response.json();
+}
+
+export async function deleteResume(resumeId: string): Promise<void> {
+  await authenticatedRequest(
+    `/api/v1/resumes/${encodeURIComponent(resumeId)}`,
+    { method: "DELETE" },
+  );
 }
 
 export async function createAnalysis(

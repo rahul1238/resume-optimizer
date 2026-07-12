@@ -8,7 +8,10 @@ from app.ai.provider import AIProviderError
 from app.auth.errors import AuthenticationError
 from app.core.config import settings
 from app.repositories.analysis_repository import AnalysisRepositoryError
-from app.repositories.resume_repository import ResumeRepositoryError
+from app.repositories.resume_repository import (
+    ResumeNotFoundError,
+    ResumeRepositoryError,
+)
 from app.services.resume_storage_service import ResumeStorageError
 from app.services.resume_upload_service import ResumeUploadError
 from app.v1.router import router as v1_router
@@ -92,7 +95,8 @@ async def resume_repository_error_handler(
     request: Request,
     error: ResumeRepositoryError,
 ) -> JSONResponse:
-    logger.exception(
+    log = logger.warning if isinstance(error, ResumeNotFoundError) else logger.exception
+    log(
         "Resume repository request failed: %s %s",
         request.method,
         request.url.path,

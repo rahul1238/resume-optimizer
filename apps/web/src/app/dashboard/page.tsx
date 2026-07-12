@@ -9,12 +9,18 @@ import Navbar from "@/components/Navbar";
 import ResumeUploader from "@/components/ResumeUploader";
 import ResumeResult from "@/components/ResumeResult";
 import ResumeAnalysisPanel from "@/components/ResumeAnalysisPanel";
-import { ResumeUploadResponse } from "@/lib/api";
+import {
+  ApiClientError,
+  deleteResume,
+  getResume,
+  listResumes,
+  ResumeSummary,
+  ResumeUploadResponse,
+} from "@/lib/api";
 import styles from "./page.module.css";
 
 interface HistoryEntry {
-  result: ResumeUploadResponse;
-  uploadedAt: string;
+  resume: ResumeSummary;
 }
 
 export default function DashboardPage() {
@@ -22,6 +28,9 @@ export default function DashboardPage() {
   const router = useRouter();
   const [result, setResult] = useState<ResumeUploadResponse | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [resumesLoading, setResumesLoading] = useState(true);
+  const [resumeActionId, setResumeActionId] = useState<string | null>(null);
+  const [resumeError, setResumeError] = useState<string | null>(null);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -30,15 +39,78 @@ export default function DashboardPage() {
     }
   }, [user, loading, router]);
 
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    listResumes()
+      .then((resumes) => {
+        if (active) setHistory(resumes.map((resume) => ({ resume })));
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setResumeError(
+            error instanceof ApiClientError
+              ? error.message
+              : "Could not load saved resumes.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setResumesLoading(false);
+      });
+    return () => { active = false; };
+  }, [user]);
+
   const handleResult = (r: ResumeUploadResponse) => {
     setResult(r);
-    setHistory((prev) => [
-      { result: r, uploadedAt: new Date().toLocaleTimeString() },
-      ...prev,
+    const summary: ResumeSummary = {
+      resume_id: r.resume_id,
+      filename: r.filename,
+      file_type: r.file_type,
+      page_count: r.page_count,
+      character_count: r.character_count,
+      created_at: new Date().toISOString(),
+    };
+    setHistory((previous) => [
+      { resume: summary },
+      ...previous.filter((entry) => entry.resume.resume_id !== r.resume_id),
     ]);
   };
 
   const handleReset = () => setResult(null);
+
+  const handleSelectResume = async (resumeId: string) => {
+    setResumeError(null);
+    setResumeActionId(resumeId);
+    try {
+      setResult(await getResume(resumeId));
+    } catch (error: unknown) {
+      setResumeError(
+        error instanceof ApiClientError ? error.message : "Could not load this resume.",
+      );
+    } finally {
+      setResumeActionId(null);
+    }
+  };
+
+  const handleDeleteResume = async (resume: ResumeSummary) => {
+    if (!window.confirm(`Delete ${resume.filename} and all of its analyses?`)) return;
+    setResumeError(null);
+    setResumeActionId(resume.resume_id);
+    try {
+      await deleteResume(resume.resume_id);
+      setHistory((previous) => previous.filter(
+        (entry) => entry.resume.resume_id !== resume.resume_id,
+      ));
+      if (result?.resume_id === resume.resume_id) setResult(null);
+    } catch (error: unknown) {
+      setResumeError(
+        error instanceof ApiClientError ? error.message : "Could not delete this resume.",
+      );
+    } finally {
+      setResumeActionId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -109,7 +181,11 @@ export default function DashboardPage() {
             <aside className={styles.sidebar}>
               <div className={`glass-card ${styles.historyCard}`}>
                 <h3 className={styles.historyTitle}>Upload History</h3>
-                {history.length === 0 ? (
+                {resumesLoading ? (
+                  <div className={styles.historyLoading}>
+                    <span className="spinner spinner-sm" /> Loading resumes…
+                  </div>
+                ) : history.length === 0 ? (
                   <div className={styles.historyEmpty}>
                     <div className={styles.historyEmptyIcon}>📂</div>
                     <p>No uploads yet.</p>
@@ -118,34 +194,50 @@ export default function DashboardPage() {
                 ) : (
                   <ul className={styles.historyList}>
                     {history.map((entry, i) => (
-                      <li key={entry.result.resume_id} className={styles.historyItem}>
+                      <li key={entry.resume.resume_id} className={styles.historyItem}>
                         <button
                           id={`history-item-${i}`}
-                          className={`${styles.historyBtn} ${result?.resume_id === entry.result.resume_id ? styles.historyBtnActive : ""}`}
-                          onClick={() => setResult(entry.result)}
+                          className={`${styles.historyBtn} ${result?.resume_id === entry.resume.resume_id ? styles.historyBtnActive : ""}`}
+                          onClick={() => handleSelectResume(entry.resume.resume_id)}
+                          disabled={resumeActionId === entry.resume.resume_id}
                         >
                           <div className={styles.historyItemLeft}>
                             <span className={styles.historyFileIcon}>
-                              {entry.result.file_type === "pdf" ? "📄" : "📝"}
+                              {entry.resume.file_type === "pdf" ? "📄" : "📝"}
                             </span>
                             <div className={styles.historyItemMeta}>
                               <span className={styles.historyFilename}>
-                                {entry.result.filename}
+                                {entry.resume.filename}
                               </span>
                               <span className={styles.historyTime}>
-                                {entry.uploadedAt} · {entry.result.character_count.toLocaleString()} chars
+                                {entry.resume.created_at
+                                  ? new Date(entry.resume.created_at).toLocaleDateString()
+                                  : "Saved"} · {entry.resume.character_count.toLocaleString()} chars
                               </span>
                             </div>
                           </div>
-                          <span className={`badge badge-${entry.result.file_type}`}>
-                            {entry.result.file_type.toUpperCase()}
-                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.deleteBtn}
+                          onClick={() => handleDeleteResume(entry.resume)}
+                          disabled={resumeActionId === entry.resume.resume_id}
+                          aria-label={`Delete ${entry.resume.filename}`}
+                          title="Delete resume"
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" />
+                          </svg>
                         </button>
                       </li>
                     ))}
                   </ul>
                 )}
               </div>
+
+              {resumeError && (
+                <div className="alert alert-error" role="alert">{resumeError}</div>
+              )}
 
               {/* Quick Stats card (if result exists) */}
               {result && (

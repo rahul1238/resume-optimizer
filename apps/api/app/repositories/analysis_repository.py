@@ -3,6 +3,7 @@ from functools import lru_cache
 
 from firebase_admin import exceptions, firestore
 from google.api_core.exceptions import GoogleAPICallError
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 from app.auth.firebase import get_firebase_app
 from app.models.analysis import AnalysisRecord
@@ -48,4 +49,24 @@ class AnalysisRepository:
             ).create(payload)
         except (GoogleAPICallError, exceptions.FirebaseError, ValueError) as error:
             logger.exception("Failed to persist analysis")
+            raise AnalysisRepositoryError() from error
+
+    @classmethod
+    def delete_for_resume(cls, resume_id: str, owner_uid: str) -> None:
+        try:
+            collection = cls._client().collection(cls.collection_name)
+            snapshots = collection.where(
+                filter=FieldFilter("resume_id", "==", resume_id)
+            ).stream()
+            batch = cls._client().batch()
+            changed = False
+            for snapshot in snapshots:
+                data = snapshot.to_dict() or {}
+                if data.get("owner_uid") == owner_uid:
+                    batch.delete(snapshot.reference)
+                    changed = True
+            if changed:
+                batch.commit()
+        except (GoogleAPICallError, exceptions.FirebaseError, ValueError) as error:
+            logger.exception("Failed to delete resume analyses")
             raise AnalysisRepositoryError() from error

@@ -43,6 +43,11 @@ def override_storage(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(ResumeStorageService, "store_original", store_original)
     monkeypatch.setattr(ResumeRepository, "create", lambda _record: None)
+    monkeypatch.setattr(
+        ResumeRepository,
+        "find_owned_by_hash",
+        lambda _owner_uid, _content_sha256: None,
+    )
 
 
 def test_upload_pdf_extracts_text() -> None:

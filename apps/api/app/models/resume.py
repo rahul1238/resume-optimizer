@@ -13,4 +13,5 @@ class ResumeRecord:
     character_count: int
     original_storage_path: str
     text_storage_path: str
+    content_sha256: str | None = None
     created_at: datetime | None = None

@@ -1,6 +1,8 @@
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import Literal
+from uuid import NAMESPACE_URL, uuid5
 
 from app.core.config import settings
 from app.models.resume import ResumeRecord
@@ -86,6 +88,19 @@ class ResumeUploadService:
         if not content:
             raise EmptyResumeError()
 
+        content_sha256 = sha256(content).hexdigest()
+        existing = ResumeRepository.find_owned_by_hash(owner_uid, content_sha256)
+        if existing:
+            return ParsedResume(
+                resume_id=existing.resume_id,
+                filename=existing.filename,
+                file_type=existing.file_type,
+                page_count=existing.page_count,
+                storage_path=existing.original_storage_path,
+                text_storage_path=existing.text_storage_path,
+                text=ResumeStorageService.read_text(existing.text_storage_path),
+            )
+
         try:
             if extension == ".pdf":
                 text, page_count = ResumeParser.parse_pdf(content)
@@ -99,12 +114,14 @@ class ResumeUploadService:
         if not text:
             raise ResumeTextNotFoundError()
 
+        resume_id = str(uuid5(NAMESPACE_URL, f"{owner_uid}:{content_sha256}"))
         stored_resume = ResumeStorageService.store_original(
             owner_uid=owner_uid,
             filename=safe_filename,
             extension=extension,
             content=content,
             extracted_text=text,
+            resume_id=resume_id,
         )
 
         try:
@@ -118,6 +135,7 @@ class ResumeUploadService:
                     character_count=len(text),
                     original_storage_path=stored_resume.storage_path,
                     text_storage_path=stored_resume.text_storage_path,
+                    content_sha256=content_sha256,
                 )
             )
         except ResumeRepositoryError:

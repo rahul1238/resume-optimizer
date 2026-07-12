@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Literal
 from urllib.parse import quote
-from uuid import uuid4
 
 import boto3
 from botocore.config import Config
@@ -78,11 +77,11 @@ class ResumeStorageService:
         extension: Literal[".pdf", ".docx"] | str,
         content: bytes,
         extracted_text: str,
+        resume_id: str,
     ) -> StoredResume:
         if extension not in cls.content_types:
             raise ResumeStorageError("Unsupported storage file type.")
 
-        resume_id = str(uuid4())
         owner_key = quote(owner_uid, safe="")
         storage_path = f"resumes/{owner_key}/{resume_id}/original{extension}"
         text_storage_path = f"resumes/{owner_key}/{resume_id}/extracted.txt"

@@ -150,6 +150,16 @@
   line-height: 1.5;
 }
 
+.historyLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 32px 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
 .historyEmptyIcon {
   font-size: 2.5rem;
   margin-bottom: 4px;
@@ -169,6 +179,10 @@
 
 .historyItem {
   width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 4px;
 }
 
 .historyBtn {
@@ -184,6 +198,30 @@
   cursor: pointer;
   transition: all var(--transition-fast);
   text-align: left;
+}
+
+.historyBtn:disabled,
+.deleteBtn:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.deleteBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-faint);
+  background: transparent;
+  cursor: pointer;
+}
+
+.deleteBtn:hover:not(:disabled) {
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.1);
 }
 
 .historyBtn:hover {
