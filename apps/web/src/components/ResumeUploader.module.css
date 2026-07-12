@@ -1,0 +1,140 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--grad-subtle);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  overflow: hidden;
+}
+
+.dropzone::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--grad-primary);
+  opacity: 0;
+  transition: opacity var(--transition-base);
+}
+
+.dropzone:hover {
+  border-color: rgba(99, 102, 241, 0.5);
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.dropzone:hover::before {
+  opacity: 0.04;
+}
+
+.dropzone:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 4px;
+}
+
+.dragging {
+  border-color: #6366f1 !important;
+  background: rgba(99, 102, 241, 0.1) !important;
+  box-shadow: var(--glow-primary);
+  transform: scale(1.01);
+}
+
+.uploading {
+  cursor: default;
+  border-style: solid;
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.hiddenInput {
+  display: none;
+}
+
+/* ── Idle State ── */
+.idleState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+.uploadIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-lg);
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+  margin-bottom: 4px;
+  transition: all var(--transition-base);
+}
+
+.dropzone:hover .uploadIcon {
+  background: rgba(99, 102, 241, 0.2);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.2);
+}
+
+.dropText {
+  font-size: 1rem;
+  color: var(--color-text-muted);
+}
+
+.dropText strong {
+  color: var(--color-text);
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--color-text-faint);
+}
+
+.formats {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ── Uploading State ── */
+.uploadingState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px;
+  width: 100%;
+  max-width: 320px;
+  position: relative;
+  z-index: 1;
+}
+
+.uploadingText {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.uploadingHint {
+  font-size: 0.78rem;
+  color: var(--color-text-faint);
+}
+
+.errorAlert {
+  border-radius: var(--radius-md);
+}

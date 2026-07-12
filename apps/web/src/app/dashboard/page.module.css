@@ -1,0 +1,269 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+}
+
+.loadingPage {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.main {
+  flex: 1;
+  padding: 48px 0 80px;
+}
+
+/* ── Page Header ── */
+.pageHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 40px;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.greeting {
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.greetingSub {
+  font-size: 0.95rem;
+  color: var(--color-text-muted);
+  margin-top: 8px;
+}
+
+.uploadCount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.uploadCountNum {
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  background: var(--grad-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+}
+
+.uploadCountLabel {
+  font-size: 0.75rem;
+  color: var(--color-text-faint);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ── Layout ── */
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    order: -1;
+  }
+}
+
+.mainCol {
+  min-width: 0;
+}
+
+/* ── Uploader Card ── */
+.uploaderCard {
+  padding: 0;
+  overflow: hidden;
+}
+
+.uploaderCardHeader {
+  padding: 24px 28px 20px;
+}
+
+.uploaderCardBody {
+  padding: 0 28px 28px;
+}
+
+.uploaderTitle {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.uploaderSubtitle {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.historyCard {
+  padding: 24px;
+  overflow: hidden;
+}
+
+.historyTitle {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 16px;
+}
+
+.historyEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 0;
+  text-align: center;
+  color: var(--color-text-faint);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.historyEmptyIcon {
+  font-size: 2.5rem;
+  margin-bottom: 4px;
+  opacity: 0.5;
+}
+
+.historyList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.historyItem {
+  width: 100%;
+}
+
+.historyBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+}
+
+.historyBtn:hover {
+  background: var(--color-surface-2);
+  border-color: var(--color-border);
+}
+
+.historyBtnActive {
+  background: rgba(99, 102, 241, 0.1) !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+.historyItemLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.historyFileIcon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.historyItemMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.historyFilename {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.historyTime {
+  font-size: 0.72rem;
+  color: var(--color-text-faint);
+  white-space: nowrap;
+}
+
+/* ── Quick Stats ── */
+.quickStats {
+  padding: 20px;
+}
+
+.quickStatsTitle {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 14px;
+}
+
+.quickStatsList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quickStat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.quickStatLabel {
+  font-size: 0.8rem;
+  color: var(--color-text-faint);
+}
+
+.quickStatValue {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
