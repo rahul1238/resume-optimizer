@@ -3,21 +3,28 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useState } from "react";
 import styles from "./Navbar.module.css";
 
 export default function Navbar() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
 
   const handleSignOut = async () => {
-    await signOut();
-    router.replace("/");
+    setSigningOut(true);
+    try {
+      await signOut();
+      router.replace("/login");
+    } finally {
+      setSigningOut(false);
+    }
   };
 
   return (
     <nav className={styles.nav}>
       <div className={styles.inner}>
-        <Link href="/" className={styles.logo}>
+        <Link href={user ? "/dashboard" : "/"} className={styles.logo}>
           <span className={styles.logoIcon}>✦</span>
           <span className="gradient-text">ResumeAI</span>
         </Link>
@@ -27,13 +34,17 @@ export default function Navbar() {
             <>
               {user ? (
                 <div className={styles.userArea}>
+                  <Link href="/dashboard" className="btn btn-ghost btn-sm">
+                    Dashboard
+                  </Link>
                   <span className={styles.userEmail}>{user.email}</span>
                   <button
                     id="nav-signout-btn"
                     onClick={handleSignOut}
                     className="btn btn-ghost btn-sm"
+                    disabled={signingOut}
                   >
-                    Sign out
+                    {signingOut ? "Signing out…" : "Sign out"}
                   </button>
                 </div>
               ) : (

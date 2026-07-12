@@ -56,3 +56,17 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+@media (max-width: 680px) {
+  .inner {
+    padding: 0 16px;
+  }
+
+  .userEmail {
+    display: none;
+  }
+
+  .userArea {
+    gap: 6px;
+  }
+}

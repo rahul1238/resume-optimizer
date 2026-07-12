@@ -1,5 +1,5 @@
-import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import AuthCta from "@/components/AuthCta";
 import styles from "./page.module.css";
 import type { Metadata } from "next";
 
@@ -27,8 +27,8 @@ const features = [
   },
   {
     icon: "🤖",
-    title: "Ready for Matching",
-    desc: "Parsed resumes provide the foundation for upcoming job-description matching.",
+    title: "Job Matching",
+    desc: "Compare a saved resume with a job description and review strengths, gaps, and keywords.",
   },
 ];
 
@@ -54,15 +54,12 @@ export default function LandingPage() {
             secure parsing, and reviewable output ready for job matching.
           </p>
           <div className={`${styles.ctas} animate-slide-up`}>
-            <Link href="/login" id="hero-cta-btn" className="btn btn-primary btn-lg">
-              Get started free
+            <AuthCta id="hero-cta-btn" className="btn btn-primary btn-lg" guestLabel="Get started free">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M5 12h14M12 5l7 7-7 7" />
               </svg>
-            </Link>
-            <Link href="/login" className="btn btn-ghost btn-lg">
-              Sign in
-            </Link>
+            </AuthCta>
+            <AuthCta className="btn btn-ghost btn-lg" guestLabel="Sign in" />
           </div>
         </div>
 
@@ -126,9 +123,11 @@ export default function LandingPage() {
             <p className={styles.ctaDesc}>
               Parse your resume now and prepare it for tailored job analysis.
             </p>
-            <Link href="/login" id="cta-banner-btn" className="btn btn-primary btn-lg">
-              Start for free →
-            </Link>
+            <AuthCta
+              id="cta-banner-btn"
+              className="btn btn-primary btn-lg"
+              guestLabel="Start for free"
+            />
           </div>
         </div>
       </section>

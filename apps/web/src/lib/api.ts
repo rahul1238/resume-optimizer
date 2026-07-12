@@ -118,26 +118,11 @@ export async function checkHealth(): Promise<{ code: number; status: string }> {
 export async function uploadResume(file: File): Promise<ResumeUploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
-
-  const send = async (forceRefresh = false) => {
-    const user = getAuthInstance().currentUser;
-    if (!user) throw new ApiClientError("Not authenticated", "missing_authentication", 401);
-    const token = forceRefresh ? await user.getIdToken(true) : await getBearerToken();
-    return fetch(`${API_BASE}/api/v1/resumes/upload`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
-    });
-  };
-
-  let res = await send();
-  if (res.status === 401) res = await send(true);
-
-  if (!res.ok) {
-    throw await parseError(res);
-  }
-
-  return res.json();
+  const response = await authenticatedRequest("/api/v1/resumes/upload", {
+    method: "POST",
+    body: formData,
+  });
+  return response.json();
 }
 
 export async function listResumes(): Promise<ResumeSummary[]> {
@@ -162,24 +147,10 @@ export async function deleteResume(resumeId: string): Promise<void> {
 export async function createAnalysis(
   request: AnalysisCreateRequest,
 ): Promise<AnalysisCreateResponse> {
-  const send = async (forceRefresh = false) => {
-    const user = getAuthInstance().currentUser;
-    if (!user) {
-      throw new ApiClientError("Not authenticated", "missing_authentication", 401);
-    }
-    const token = forceRefresh ? await user.getIdToken(true) : await getBearerToken();
-    return fetch(`${API_BASE}/api/v1/analyses`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(request),
-    });
-  };
-
-  let response = await send();
-  if (response.status === 401) response = await send(true);
-  if (!response.ok) throw await parseError(response);
+  const response = await authenticatedRequest("/api/v1/analyses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
   return response.json();
 }

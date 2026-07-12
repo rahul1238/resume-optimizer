@@ -42,7 +42,7 @@ function getFirebaseErrorMessage(code: string): string {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, error: authError } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -89,6 +89,15 @@ export default function LoginPage() {
       setGoogleLoading(false);
     }
   };
+
+  if (authLoading || user) {
+    return (
+      <div className={styles.authLoading} role="status" aria-live="polite">
+        <div className="spinner spinner-lg" />
+        <p>{user ? "Opening your dashboard…" : "Restoring your session…"}</p>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.page}>
@@ -156,14 +165,14 @@ export default function LoginPage() {
           <div className="divider">or</div>
 
           {/* Error */}
-          {error && (
+          {(error || authError) && (
             <div className="alert alert-error animate-fade-in" role="alert">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
-              {error}
+              {error || authError}
             </div>
           )}
 

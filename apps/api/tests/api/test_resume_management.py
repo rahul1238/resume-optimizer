@@ -79,3 +79,18 @@ def test_delete_resume_returns_no_content(monkeypatch: pytest.MonkeyPatch) -> No
     assert response.status_code == 204
     assert response.content == b""
     assert deleted == [("test-user-id", "resume-id")]
+
+
+def test_delete_cors_preflight_allows_the_local_frontend() -> None:
+    response = client.options(
+        "/api/v1/resumes/resume-id",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "DELETE",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert "DELETE" in response.headers["access-control-allow-methods"]

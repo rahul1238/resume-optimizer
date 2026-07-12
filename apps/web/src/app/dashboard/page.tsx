@@ -24,7 +24,7 @@ interface HistoryEntry {
 }
 
 export default function DashboardPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, error: authError } = useAuth();
   const router = useRouter();
   const [result, setResult] = useState<ResumeUploadResponse | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -105,7 +105,9 @@ export default function DashboardPage() {
       if (result?.resume_id === resume.resume_id) setResult(null);
     } catch (error: unknown) {
       setResumeError(
-        error instanceof ApiClientError ? error.message : "Could not delete this resume.",
+        error instanceof ApiClientError
+          ? error.message
+          : "Could not reach the API to delete this resume. Check that the backend is running.",
       );
     } finally {
       setResumeActionId(null);
@@ -138,14 +140,14 @@ export default function DashboardPage() {
                 Hey, <span className="gradient-text">{firstName}</span> 👋
               </h1>
               <p className={styles.greetingSub}>
-                Upload a resume to extract and analyze its contents.
+                Select a saved resume or upload a new one to analyze a job match.
               </p>
             </div>
             {history.length > 0 && (
               <div className={styles.uploadCount}>
                 <span className={styles.uploadCountNum}>{history.length}</span>
                 <span className={styles.uploadCountLabel}>
-                  this session
+                  saved {history.length === 1 ? "resume" : "resumes"}
                 </span>
               </div>
             )}
@@ -180,7 +182,7 @@ export default function DashboardPage() {
             {/* Sidebar — Upload History */}
             <aside className={styles.sidebar}>
               <div className={`glass-card ${styles.historyCard}`}>
-                <h3 className={styles.historyTitle}>Upload History</h3>
+                <h3 className={styles.historyTitle}>Saved Resumes</h3>
                 {resumesLoading ? (
                   <div className={styles.historyLoading}>
                     <span className="spinner spinner-sm" /> Loading resumes…
@@ -235,8 +237,10 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {resumeError && (
-                <div className="alert alert-error" role="alert">{resumeError}</div>
+              {(resumeError || authError) && (
+                <div className="alert alert-error" role="alert">
+                  {resumeError || authError}
+                </div>
               )}
 
               {/* Quick Stats card (if result exists) */}
