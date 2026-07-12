@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.main import app
+from app.repositories.resume_repository import ResumeRepository
 from app.services.resume_storage_service import ResumeStorageService, StoredResume
 
 client = TestClient(app)
@@ -32,12 +33,16 @@ def override_storage(monkeypatch: pytest.MonkeyPatch) -> None:
         return StoredResume(
             resume_id="b6b6b661-144a-4cb7-b0d8-2ce2912e211d",
             storage_path=(
+                "resumes/test-user-id/b6b6b661-144a-4cb7-b0d8-2ce2912e211d/original.pdf"
+            ),
+            text_storage_path=(
                 "resumes/test-user-id/b6b6b661-144a-4cb7-b0d8-2ce2912e211d/"
-                "original.pdf"
+                "extracted.txt"
             ),
         )
 
     monkeypatch.setattr(ResumeStorageService, "store_original", store_original)
+    monkeypatch.setattr(ResumeRepository, "create", lambda _record: None)
 
 
 def test_upload_pdf_extracts_text() -> None:

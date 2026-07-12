@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     r2_upload_timeout_seconds: int = 30
     max_resume_upload_bytes: int = 5 * 1024 * 1024
     max_docx_uncompressed_bytes: int = 20 * 1024 * 1024
+    gemini_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    )
+    gemini_model: str = "gemini-3.5-flash"
+    gemini_timeout_seconds: int = 60
+    max_job_description_characters: int = 30_000
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

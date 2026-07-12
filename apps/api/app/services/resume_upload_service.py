@@ -3,7 +3,9 @@ from pathlib import Path
 from typing import Literal
 
 from app.core.config import settings
+from app.models.resume import ResumeRecord
 from app.parsers.resume_parser import ResumeParser, ResumeParsingError
+from app.repositories.resume_repository import ResumeRepository, ResumeRepositoryError
 from app.services.resume_storage_service import ResumeStorageService
 
 
@@ -63,6 +65,7 @@ class ParsedResume:
     file_type: Literal["pdf", "docx"]
     page_count: int | None
     storage_path: str
+    text_storage_path: str
     text: str
 
 
@@ -101,7 +104,28 @@ class ResumeUploadService:
             filename=safe_filename,
             extension=extension,
             content=content,
+            extracted_text=text,
         )
+
+        try:
+            ResumeRepository.create(
+                ResumeRecord(
+                    resume_id=stored_resume.resume_id,
+                    owner_uid=owner_uid,
+                    filename=safe_filename,
+                    file_type=file_type,
+                    page_count=page_count,
+                    character_count=len(text),
+                    original_storage_path=stored_resume.storage_path,
+                    text_storage_path=stored_resume.text_storage_path,
+                )
+            )
+        except ResumeRepositoryError:
+            ResumeStorageService.delete_paths(
+                stored_resume.storage_path,
+                stored_resume.text_storage_path,
+            )
+            raise
 
         return ParsedResume(
             resume_id=stored_resume.resume_id,
@@ -109,5 +133,6 @@ class ResumeUploadService:
             file_type=file_type,
             page_count=page_count,
             storage_path=stored_resume.storage_path,
+            text_storage_path=stored_resume.text_storage_path,
             text=text,
         )

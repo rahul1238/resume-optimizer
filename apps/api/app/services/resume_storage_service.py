@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Literal
@@ -9,6 +10,8 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class ResumeStorageError(Exception):
@@ -30,14 +33,14 @@ class ResumeStorageConfigurationError(ResumeStorageError):
 class StoredResume:
     resume_id: str
     storage_path: str
+    text_storage_path: str
 
 
 class ResumeStorageService:
     content_types: dict[Literal[".pdf", ".docx"], str] = {
         ".pdf": "application/pdf",
         ".docx": (
-            "application/"
-            "vnd.openxmlformats-officedocument.wordprocessingml.document"
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         ),
     }
 
@@ -74,6 +77,7 @@ class ResumeStorageService:
         filename: str,
         extension: Literal[".pdf", ".docx"] | str,
         content: bytes,
+        extracted_text: str,
     ) -> StoredResume:
         if extension not in cls.content_types:
             raise ResumeStorageError("Unsupported storage file type.")
@@ -81,9 +85,11 @@ class ResumeStorageService:
         resume_id = str(uuid4())
         owner_key = quote(owner_uid, safe="")
         storage_path = f"resumes/{owner_key}/{resume_id}/original{extension}"
+        text_storage_path = f"resumes/{owner_key}/{resume_id}/extracted.txt"
 
         try:
-            cls._client().put_object(
+            client = cls._client()
+            client.put_object(
                 Bucket=settings.r2_bucket_name,
                 Key=storage_path,
                 Body=content,
@@ -94,7 +100,45 @@ class ResumeStorageService:
                     "original-filename": filename,
                 },
             )
+            client.put_object(
+                Bucket=settings.r2_bucket_name,
+                Key=text_storage_path,
+                Body=extracted_text.encode("utf-8"),
+                ContentType="text/plain; charset=utf-8",
+                Metadata={"owner-uid": owner_uid, "resume-id": resume_id},
+            )
         except (BotoCoreError, ClientError, ValueError) as error:
+            cls.delete_paths(storage_path, text_storage_path)
             raise ResumeStorageError() from error
 
-        return StoredResume(resume_id=resume_id, storage_path=storage_path)
+        return StoredResume(
+            resume_id=resume_id,
+            storage_path=storage_path,
+            text_storage_path=text_storage_path,
+        )
+
+    @classmethod
+    def delete_paths(cls, *storage_paths: str) -> None:
+        paths = [path for path in storage_paths if path]
+        if not paths:
+            return
+        try:
+            cls._client().delete_objects(
+                Bucket=settings.r2_bucket_name,
+                Delete={"Objects": [{"Key": path} for path in paths], "Quiet": True},
+            )
+        except (BotoCoreError, ClientError, ValueError):
+            logger.exception("Failed to clean up resume storage objects")
+
+    @classmethod
+    def read_text(cls, storage_path: str) -> str:
+        try:
+            response = cls._client().get_object(
+                Bucket=settings.r2_bucket_name,
+                Key=storage_path,
+            )
+            return response["Body"].read().decode("utf-8")
+        except (BotoCoreError, ClientError, UnicodeDecodeError, ValueError) as error:
+            raise ResumeStorageError(
+                "Unable to retrieve parsed resume text."
+            ) from error
