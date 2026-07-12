@@ -11,6 +11,10 @@ from app.repositories.analysis_repository import (
     AnalysisNotFoundError,
     AnalysisRepositoryError,
 )
+from app.repositories.improvement_repository import (
+    ImprovementNotFoundError,
+    ImprovementRepositoryError,
+)
 from app.repositories.resume_repository import (
     ResumeNotFoundError,
     ResumeRepositoryError,
@@ -26,7 +30,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_allowed_origins,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
     max_age=600,
 )
@@ -113,11 +117,16 @@ async def resume_repository_error_handler(
 
 @app.exception_handler(AnalysisRepositoryError)
 @app.exception_handler(AIProviderError)
+@app.exception_handler(ImprovementRepositoryError)
 async def analysis_service_error_handler(
     request: Request,
-    error: AnalysisRepositoryError | AIProviderError,
+    error: AnalysisRepositoryError | AIProviderError | ImprovementRepositoryError,
 ) -> JSONResponse:
-    log = logger.warning if isinstance(error, AnalysisNotFoundError) else logger.error
+    log = (
+        logger.warning
+        if isinstance(error, (AnalysisNotFoundError, ImprovementNotFoundError))
+        else logger.error
+    )
     log(
         "Analysis request failed: %s %s",
         request.method,

@@ -66,6 +66,31 @@ export interface AnalysisDetail extends AnalysisSummary {
   result: ResumeAnalysisResult;
 }
 
+export interface BulletRewrite {
+  original: string;
+  suggested: string;
+  reason: string;
+}
+
+export interface ResumeImprovementResult {
+  optimized_resume_draft: string;
+  suggested_summary: string;
+  summary_reason: string;
+  bullet_rewrites: BulletRewrite[];
+  skills_to_emphasize: string[];
+  ats_recommendations: string[];
+  integrity_notes: string[];
+}
+
+export interface ImprovementResponse {
+  analysis_id: string;
+  resume_id: string;
+  provider: string;
+  model: string;
+  created_at: string | null;
+  result: ResumeImprovementResult;
+}
+
 interface ApiErrorBody {
   detail?: string | Array<{ msg?: string }>;
   code?: string;
@@ -190,4 +215,37 @@ export async function deleteAnalysis(analysisId: string): Promise<void> {
     `/api/v1/analyses/${encodeURIComponent(analysisId)}`,
     { method: "DELETE" },
   );
+}
+
+export async function generateImprovements(
+  analysisId: string,
+  revision?: {
+    current_result: ResumeImprovementResult;
+    feedback: string[];
+  },
+): Promise<ImprovementResponse> {
+  const response = await authenticatedRequest(
+    `/api/v1/analyses/${encodeURIComponent(analysisId)}/improvements`,
+    {
+      method: "POST",
+      headers: revision ? { "Content-Type": "application/json" } : undefined,
+      body: revision ? JSON.stringify(revision) : undefined,
+    },
+  );
+  return response.json();
+}
+
+export async function saveImprovements(
+  analysisId: string,
+  result: ResumeImprovementResult,
+): Promise<ImprovementResponse> {
+  const response = await authenticatedRequest(
+    `/api/v1/analyses/${encodeURIComponent(analysisId)}/improvements`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ result }),
+    },
+  );
+  return response.json();
 }

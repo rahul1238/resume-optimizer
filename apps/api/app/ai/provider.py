@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from app.ai.schemas import ResumeAnalysisResult
+from app.ai.schemas import ResumeAnalysisResult, ResumeImprovementResult
 
 
 class AIProviderError(Exception):
@@ -29,3 +29,13 @@ class AIProvider(Protocol):
         job_title: str | None,
         company_name: str | None,
     ) -> ResumeAnalysisResult: ...
+
+    def improve_resume(
+        self,
+        resume_text: str,
+        job_description: str,
+        job_title: str | None,
+        company_name: str | None,
+        current_result: ResumeImprovementResult | None = None,
+        feedback: list[str] | None = None,
+    ) -> ResumeImprovementResult: ...

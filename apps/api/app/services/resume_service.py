@@ -1,5 +1,6 @@
 from app.models.resume import ResumeRecord
 from app.repositories.analysis_repository import AnalysisRepository
+from app.repositories.improvement_repository import ImprovementRepository
 from app.repositories.resume_repository import ResumeRepository
 from app.services.resume_storage_service import ResumeStorageService
 from app.services.resume_upload_service import ParsedResume
@@ -31,5 +32,7 @@ class ResumeService:
             record.original_storage_path,
             record.text_storage_path,
         )
-        AnalysisRepository.delete_for_resume(resume_id, owner_uid)
+        analysis_ids = AnalysisRepository.delete_for_resume(resume_id, owner_uid)
+        for analysis_id in analysis_ids:
+            ImprovementRepository.delete(analysis_id)
         ResumeRepository.delete(resume_id)

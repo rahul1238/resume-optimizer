@@ -116,7 +116,7 @@ class AnalysisRepository:
             raise AnalysisRepositoryError() from error
 
     @classmethod
-    def delete_for_resume(cls, resume_id: str, owner_uid: str) -> None:
+    def delete_for_resume(cls, resume_id: str, owner_uid: str) -> list[str]:
         try:
             collection = cls._client().collection(cls.collection_name)
             snapshots = collection.where(
@@ -124,13 +124,16 @@ class AnalysisRepository:
             ).stream()
             batch = cls._client().batch()
             changed = False
+            deleted_ids: list[str] = []
             for snapshot in snapshots:
                 data = snapshot.to_dict() or {}
                 if data.get("owner_uid") == owner_uid:
                     batch.delete(snapshot.reference)
                     changed = True
+                    deleted_ids.append(snapshot.id)
             if changed:
                 batch.commit()
+            return deleted_ids
         except (GoogleAPICallError, exceptions.FirebaseError, ValueError) as error:
             logger.exception("Failed to delete resume analyses")
             raise AnalysisRepositoryError() from error

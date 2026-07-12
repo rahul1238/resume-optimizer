@@ -4,6 +4,7 @@ from app.ai.factory import get_ai_provider
 from app.ai.schemas import ResumeAnalysisResult
 from app.models.analysis import AnalysisRecord
 from app.repositories.analysis_repository import AnalysisRepository
+from app.repositories.improvement_repository import ImprovementRepository
 from app.repositories.resume_repository import ResumeRepository
 from app.services.resume_storage_service import ResumeStorageService
 
@@ -20,6 +21,7 @@ class AnalysisService:
     @staticmethod
     def delete(owner_uid: str, analysis_id: str) -> None:
         AnalysisRepository.get_owned(analysis_id, owner_uid)
+        ImprovementRepository.delete(analysis_id)
         AnalysisRepository.delete(analysis_id)
 
     @staticmethod

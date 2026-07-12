@@ -139,6 +139,180 @@
   cursor: wait;
 }
 
+.improvementPanel {
+  margin-top: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.improvementHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 28px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+}
+
+.improvementHeader h3 {
+  margin-top: 4px;
+  font-size: 1rem;
+}
+
+.improvementEmpty {
+  padding: 24px 28px;
+  color: var(--color-text-faint);
+  font-size: 0.82rem;
+}
+
+.improvementBody {
+  display: flex;
+  flex-direction: column;
+}
+
+.suggestionBlock {
+  padding: 24px 28px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.suggestionBlock h4,
+.improvementGrid h4 {
+  margin-bottom: 12px;
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.draftHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+
+.draftHeading h4 {
+  margin-bottom: 4px;
+}
+
+.draftHeading p {
+  color: var(--color-text-faint);
+  font-size: 0.75rem;
+}
+
+.draftEditor {
+  min-height: 560px;
+  resize: vertical;
+  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+
+.suggestionEditor {
+  min-height: 130px;
+  resize: vertical;
+  line-height: 1.7;
+}
+
+.suggestionBlock small,
+.rewrite small {
+  display: block;
+  margin-top: 9px;
+  color: var(--color-text-faint);
+  font-size: 0.74rem;
+}
+
+.rewrites {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rewrite {
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-2);
+}
+
+.rewrite p {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.rewriteEditor {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.rewriteEditor > span {
+  padding-top: 10px;
+  color: var(--color-text-faint);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.rewriteEditor textarea {
+  min-height: 90px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.feedbackField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.feedbackField > span {
+  color: var(--color-text-faint);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.feedbackField textarea {
+  min-height: 76px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.rewrite p span {
+  color: var(--color-text-faint);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.improvementGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.revisionActions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 18px;
+  padding: 24px 28px 28px;
+  border-top: 1px solid var(--color-border);
+}
+
+.improvementGrid .resultSection:nth-child(odd) {
+  border-right: 1px solid var(--color-border);
+}
+
 .formHeader {
   padding: 24px 28px 20px;
   border-bottom: 1px solid var(--color-border);
@@ -316,7 +490,8 @@
 @media (max-width: 680px) {
   .optionalFields,
   .resultGrid,
-  .keywordGrid {
+  .keywordGrid,
+  .improvementGrid {
     grid-template-columns: 1fr;
   }
 
@@ -331,5 +506,24 @@
   .formActions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .improvementHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .draftHeading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rewrite p {
+    grid-template-columns: 1fr;
+  }
+
+  .rewriteEditor,
+  .revisionActions {
+    grid-template-columns: 1fr;
   }
 }

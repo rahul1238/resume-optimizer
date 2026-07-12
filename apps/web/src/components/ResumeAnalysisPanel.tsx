@@ -8,7 +8,10 @@ import {
   createAnalysis,
   deleteAnalysis,
   getAnalysis,
+  generateImprovements,
+  ImprovementResponse,
   listAnalyses,
+  saveImprovements,
 } from "@/lib/api";
 import styles from "./ResumeAnalysisPanel.module.css";
 
@@ -48,6 +51,11 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
   const [history, setHistory] = useState<AnalysisSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyActionId, setHistoryActionId] = useState<string | null>(null);
+  const [improvement, setImprovement] = useState<ImprovementResponse | null>(null);
+  const [improvementLoading, setImprovementLoading] = useState(false);
+  const [improvementSaving, setImprovementSaving] = useState(false);
+  const [improvementSaved, setImprovementSaved] = useState(false);
+  const [improvementFeedback, setImprovementFeedback] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,6 +99,8 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
         created_at: createdAt,
       };
       setAnalysis(detail);
+      setImprovement(null);
+      setImprovementFeedback({});
       setHistory((previous) => [{
         analysis_id: response.analysis_id,
         resume_id: response.resume_id,
@@ -118,6 +128,8 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     try {
       const detail = await getAnalysis(analysisId);
       setAnalysis(detail);
+      setImprovement(null);
+      setImprovementFeedback({});
       setJobTitle(detail.job_title ?? "");
       setCompanyName(detail.company_name ?? "");
       setJobDescription(detail.job_description);
@@ -146,6 +158,83 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
         : "Could not delete this analysis.");
     } finally {
       setHistoryActionId(null);
+    }
+  };
+
+  const handleGenerateImprovements = async (revise = false) => {
+    if (!analysis) return;
+    setError(null);
+    setImprovementLoading(true);
+    try {
+      const feedback = Object.entries(improvementFeedback)
+        .filter(([, value]) => value.trim())
+        .map(([section, value]) => `${section}: ${value.trim()}`);
+      const response = await generateImprovements(
+        analysis.analysis_id,
+        revise && improvement
+          ? { current_result: improvement.result, feedback }
+          : undefined,
+      );
+      setImprovement(response);
+      setImprovementFeedback({});
+    } catch (caught: unknown) {
+      setError(caught instanceof ApiClientError
+        ? ANALYSIS_ERRORS[caught.code] ?? caught.message
+        : "Could not generate resume improvements.");
+    } finally {
+      setImprovementLoading(false);
+    }
+  };
+
+  const updateImprovementFeedback = (key: string, value: string) => {
+    setImprovementFeedback((previous) => ({ ...previous, [key]: value }));
+  };
+
+  const updateSuggestedSummary = (value: string) => {
+    setImprovementSaved(false);
+    setImprovement((current) => current ? {
+      ...current,
+      result: { ...current.result, suggested_summary: value },
+    } : current);
+  };
+
+  const updateSuggestedBullet = (index: number, value: string) => {
+    setImprovementSaved(false);
+    setImprovement((current) => current ? {
+      ...current,
+      result: {
+        ...current.result,
+        bullet_rewrites: current.result.bullet_rewrites.map((rewrite, itemIndex) => (
+          itemIndex === index ? { ...rewrite, suggested: value } : rewrite
+        )),
+      },
+    } : current);
+  };
+
+  const updateOptimizedDraft = (value: string) => {
+    setImprovementSaved(false);
+    setImprovement((current) => current ? {
+      ...current,
+      result: { ...current.result, optimized_resume_draft: value },
+    } : current);
+  };
+
+  const handleSaveImprovements = async () => {
+    if (!analysis || !improvement) return;
+    setError(null);
+    setImprovementSaving(true);
+    try {
+      setImprovement(await saveImprovements(
+        analysis.analysis_id,
+        improvement.result,
+      ));
+      setImprovementSaved(true);
+    } catch (caught: unknown) {
+      setError(caught instanceof ApiClientError
+        ? caught.message
+        : "Could not save the edited resume draft.");
+    } finally {
+      setImprovementSaving(false);
     }
   };
 
@@ -261,6 +350,149 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
           Analysis ID {analysis.analysis_id.slice(0, 8)} · {analysis.model}
         </footer>
         </div>
+
+        <section className={styles.improvementPanel}>
+          <div className={styles.improvementHeader}>
+            <div>
+              <p className={styles.eyebrow}>Targeted editing</p>
+              <h3>Resume improvements</h3>
+            </div>
+            {!improvement && (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => handleGenerateImprovements(false)}
+                disabled={improvementLoading}
+              >
+                {improvementLoading
+                  ? <><span className="spinner spinner-sm" /> Generating…</>
+                  : "Generate improvements"}
+              </button>
+            )}
+          </div>
+
+          {improvement ? (
+            <div className={styles.improvementBody}>
+              <section className={styles.suggestionBlock}>
+                <div className={styles.draftHeading}>
+                  <div>
+                    <h4>Complete optimized draft</h4>
+                    <p>Edit this draft directly. Manual saves do not call Gemini.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleSaveImprovements}
+                    disabled={improvementSaving || !improvement.result.optimized_resume_draft.trim()}
+                  >
+                    {improvementSaving
+                      ? <><span className="spinner spinner-sm" /> Saving…</>
+                      : improvementSaved ? "Saved" : "Save draft"}
+                  </button>
+                </div>
+                <textarea
+                  className={`form-input ${styles.draftEditor}`}
+                  value={improvement.result.optimized_resume_draft}
+                  onChange={(event) => updateOptimizedDraft(event.target.value)}
+                  maxLength={50000}
+                  aria-label="Edit complete optimized resume draft"
+                />
+              </section>
+
+              <section className={styles.suggestionBlock}>
+                <h4>Suggested summary</h4>
+                <textarea
+                  className={`form-input ${styles.suggestionEditor}`}
+                  value={improvement.result.suggested_summary}
+                  onChange={(event) => updateSuggestedSummary(event.target.value)}
+                  maxLength={1500}
+                  aria-label="Edit suggested summary"
+                />
+                <small>{improvement.result.summary_reason}</small>
+                <label className={styles.feedbackField}>
+                  <span>Feedback for this summary</span>
+                  <textarea
+                    className="form-input"
+                    value={improvementFeedback.summary ?? ""}
+                    onChange={(event) => updateImprovementFeedback("summary", event.target.value)}
+                    maxLength={1000}
+                    placeholder="For example: make it shorter and emphasize backend ownership"
+                  />
+                </label>
+              </section>
+
+              {improvement.result.bullet_rewrites.length > 0 && (
+                <section className={styles.suggestionBlock}>
+                  <h4>Experience bullet rewrites</h4>
+                  <div className={styles.rewrites}>
+                    {improvement.result.bullet_rewrites.map((rewrite, index) => (
+                      <div key={`${rewrite.original}-${index}`} className={styles.rewrite}>
+                        <p><span>Original</span>{rewrite.original}</p>
+                        <div className={styles.rewriteEditor}>
+                          <span>Suggested</span>
+                          <textarea
+                            className="form-input"
+                            value={rewrite.suggested}
+                            onChange={(event) => updateSuggestedBullet(index, event.target.value)}
+                            maxLength={1200}
+                            aria-label={`Edit suggested bullet ${index + 1}`}
+                          />
+                        </div>
+                        <small>{rewrite.reason}</small>
+                        <label className={styles.feedbackField}>
+                          <span>Feedback for this bullet</span>
+                          <textarea
+                            className="form-input"
+                            value={improvementFeedback[`bullet-${index}`] ?? ""}
+                            onChange={(event) => updateImprovementFeedback(
+                              `bullet-${index}`,
+                              event.target.value,
+                            )}
+                            maxLength={1000}
+                            placeholder="Describe what should change"
+                          />
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              <div className={styles.improvementGrid}>
+                <ResultList title="ATS recommendations" items={improvement.result.ats_recommendations} />
+                <ResultList title="Skills to emphasize" items={improvement.result.skills_to_emphasize} />
+                <ResultList title="Integrity notes" items={improvement.result.integrity_notes} />
+              </div>
+
+              <div className={styles.revisionActions}>
+                <label className={styles.feedbackField}>
+                  <span>General feedback</span>
+                  <textarea
+                    className="form-input"
+                    value={improvementFeedback.general ?? ""}
+                    onChange={(event) => updateImprovementFeedback("general", event.target.value)}
+                    maxLength={1000}
+                    placeholder="Add instructions that apply to the complete improvement draft"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => handleGenerateImprovements(true)}
+                  disabled={improvementLoading}
+                >
+                  {improvementLoading
+                    ? <><span className="spinner spinner-sm" /> Regenerating…</>
+                    : "Regenerate with edits"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className={styles.improvementEmpty}>
+              Generate evidence-based rewrites using this resume and job description.
+            </p>
+          )}
+        </section>
       </>
     );
   }

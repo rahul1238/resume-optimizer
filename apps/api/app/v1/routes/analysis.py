@@ -6,14 +6,31 @@ from starlette.concurrency import run_in_threadpool
 from app.ai.schemas import ResumeAnalysisResult
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.services.analysis_service import AnalysisService
+from app.services.improvement_service import ImprovementService
 from app.v1.schemas.analysis import (
     AnalysisCreateRequest,
     AnalysisCreateResponse,
     AnalysisDetailResponse,
     AnalysisSummaryResponse,
 )
+from app.v1.schemas.improvement import (
+    ImprovementGenerateRequest,
+    ImprovementResponse,
+    ImprovementSaveRequest,
+)
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
+
+
+def improvement_response(record) -> ImprovementResponse:
+    return ImprovementResponse(
+        analysis_id=record.analysis_id,
+        resume_id=record.resume_id,
+        provider=record.provider,
+        model=record.model,
+        created_at=record.created_at,
+        result=ImprovementService.result(record),
+    )
 
 
 def detail_response(record) -> AnalysisDetailResponse:
@@ -83,6 +100,51 @@ async def delete_analysis(
         analysis_id,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{analysis_id}/improvements", response_model=ImprovementResponse)
+async def get_improvements(
+    analysis_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> ImprovementResponse:
+    record = await run_in_threadpool(
+        ImprovementService.get,
+        current_user.uid,
+        analysis_id,
+    )
+    return improvement_response(record)
+
+
+@router.post("/{analysis_id}/improvements", response_model=ImprovementResponse)
+async def generate_improvements(
+    analysis_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    request: ImprovementGenerateRequest | None = None,
+) -> ImprovementResponse:
+    payload = request or ImprovementGenerateRequest()
+    record = await run_in_threadpool(
+        ImprovementService.generate,
+        current_user.uid,
+        analysis_id,
+        payload.current_result,
+        payload.feedback,
+    )
+    return improvement_response(record)
+
+
+@router.put("/{analysis_id}/improvements", response_model=ImprovementResponse)
+async def save_improvements(
+    analysis_id: str,
+    request: ImprovementSaveRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> ImprovementResponse:
+    record = await run_in_threadpool(
+        ImprovementService.save,
+        current_user.uid,
+        analysis_id,
+        request.result,
+    )
+    return improvement_response(record)
 
 
 @router.post(
