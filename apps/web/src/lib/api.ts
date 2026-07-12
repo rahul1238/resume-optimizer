@@ -14,6 +14,32 @@ export interface ResumeUploadResponse {
   text: string;
 }
 
+export interface ResumeAnalysisResult {
+  match_score: number;
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  matched_keywords: string[];
+  missing_keywords: string[];
+  recommendations: string[];
+}
+
+export interface AnalysisCreateRequest {
+  resume_id: string;
+  job_description: string;
+  job_title?: string;
+  company_name?: string;
+}
+
+export interface AnalysisCreateResponse {
+  analysis_id: string;
+  resume_id: string;
+  status: "completed";
+  provider: string;
+  model: string;
+  result: ResumeAnalysisResult;
+}
+
 interface ApiErrorBody {
   detail?: string | Array<{ msg?: string }>;
   code?: string;
@@ -78,4 +104,29 @@ export async function uploadResume(file: File): Promise<ResumeUploadResponse> {
   }
 
   return res.json();
+}
+
+export async function createAnalysis(
+  request: AnalysisCreateRequest,
+): Promise<AnalysisCreateResponse> {
+  const send = async (forceRefresh = false) => {
+    const user = getAuthInstance().currentUser;
+    if (!user) {
+      throw new ApiClientError("Not authenticated", "missing_authentication", 401);
+    }
+    const token = forceRefresh ? await user.getIdToken(true) : await getBearerToken();
+    return fetch(`${API_BASE}/api/v1/analyses`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    });
+  };
+
+  let response = await send();
+  if (response.status === 401) response = await send(true);
+  if (!response.ok) throw await parseError(response);
+  return response.json();
 }

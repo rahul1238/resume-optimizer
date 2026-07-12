@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import Navbar from "@/components/Navbar";
 import ResumeUploader from "@/components/ResumeUploader";
 import ResumeResult from "@/components/ResumeResult";
+import ResumeAnalysisPanel from "@/components/ResumeAnalysisPanel";
 import { ResumeUploadResponse } from "@/lib/api";
 import styles from "./page.module.css";
 
@@ -82,7 +83,13 @@ export default function DashboardPage() {
             {/* Main Content */}
             <div className={styles.mainCol}>
               {result ? (
-                <ResumeResult result={result} onReset={handleReset} />
+                <>
+                  <ResumeResult result={result} onReset={handleReset} />
+                  <ResumeAnalysisPanel
+                    key={result.resume_id}
+                    resumeId={result.resume_id}
+                  />
+                </>
               ) : (
                 <div className={`glass-card ${styles.uploaderCard}`}>
                   <div className={styles.uploaderCardHeader}>
