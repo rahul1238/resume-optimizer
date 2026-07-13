@@ -6,6 +6,7 @@ from starlette.concurrency import run_in_threadpool
 from app.ai.schemas import ResumeAnalysisResult
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.services.analysis_service import AnalysisService
+from app.services.export_service import ResumeExportService
 from app.services.improvement_service import ImprovementService
 from app.v1.schemas.analysis import (
     AnalysisCreateRequest,
@@ -145,6 +146,44 @@ async def save_improvements(
         request.result,
     )
     return improvement_response(record)
+
+
+@router.get("/{analysis_id}/export/docx")
+async def export_docx(
+    analysis_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> Response:
+    draft = await run_in_threadpool(
+        ResumeExportService.get_draft,
+        current_user.uid,
+        analysis_id,
+    )
+    content = await run_in_threadpool(ResumeExportService.to_docx, draft)
+    return Response(
+        content=content,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ),
+        headers={"Content-Disposition": 'attachment; filename="optimized-resume.docx"'},
+    )
+
+
+@router.get("/{analysis_id}/export/pdf")
+async def export_pdf(
+    analysis_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> Response:
+    draft = await run_in_threadpool(
+        ResumeExportService.get_draft,
+        current_user.uid,
+        analysis_id,
+    )
+    content = await run_in_threadpool(ResumeExportService.to_pdf, draft)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="optimized-resume.pdf"'},
+    )
 
 
 @router.post(

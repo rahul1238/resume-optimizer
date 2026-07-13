@@ -7,6 +7,7 @@ import {
   AnalysisSummary,
   createAnalysis,
   deleteAnalysis,
+  downloadResumeExport,
   getAnalysis,
   generateImprovements,
   ImprovementResponse,
@@ -55,6 +56,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
   const [improvementLoading, setImprovementLoading] = useState(false);
   const [improvementSaving, setImprovementSaving] = useState(false);
   const [improvementSaved, setImprovementSaved] = useState(false);
+  const [exporting, setExporting] = useState<"pdf" | "docx" | null>(null);
   const [improvementFeedback, setImprovementFeedback] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -238,6 +240,21 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     }
   };
 
+  const handleExport = async (format: "pdf" | "docx") => {
+    if (!analysis) return;
+    setError(null);
+    setExporting(format);
+    try {
+      await downloadResumeExport(analysis.analysis_id, format);
+    } catch (caught: unknown) {
+      setError(caught instanceof ApiClientError
+        ? caught.message
+        : `Could not download the ${format.toUpperCase()} resume.`);
+    } finally {
+      setExporting(null);
+    }
+  };
+
   const historySection = (
     <section className={styles.historyPanel} aria-labelledby="analysis-history-title">
       <div className={styles.historyHeader}>
@@ -379,16 +396,17 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                     <h4>Complete optimized draft</h4>
                     <p>Edit this draft directly. Manual saves do not call Gemini.</p>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleSaveImprovements}
-                    disabled={improvementSaving || !improvement.result.optimized_resume_draft.trim()}
-                  >
-                    {improvementSaving
-                      ? <><span className="spinner spinner-sm" /> Saving…</>
-                      : improvementSaved ? "Saved" : "Save draft"}
-                  </button>
+                  <div className={styles.draftActions}>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={handleSaveImprovements} disabled={improvementSaving || !improvement.result.optimized_resume_draft.trim()}>
+                      {improvementSaving ? "Saving…" : improvementSaved ? "Saved" : "Save draft"}
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => handleExport("docx")} disabled={exporting !== null || !improvement.result.optimized_resume_draft.trim()}>
+                      {exporting === "docx" ? "Preparing…" : "Download DOCX"}
+                    </button>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => handleExport("pdf")} disabled={exporting !== null || !improvement.result.optimized_resume_draft.trim()}>
+                      {exporting === "pdf" ? "Preparing…" : "Download PDF"}
+                    </button>
+                  </div>
                 </div>
                 <textarea
                   className={`form-input ${styles.draftEditor}`}

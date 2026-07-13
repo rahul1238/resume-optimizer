@@ -249,3 +249,20 @@ export async function saveImprovements(
   );
   return response.json();
 }
+
+export async function downloadResumeExport(
+  analysisId: string,
+  format: "pdf" | "docx",
+): Promise<void> {
+  const response = await authenticatedRequest(
+    `/api/v1/analyses/${encodeURIComponent(analysisId)}/export/${format}`,
+  );
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `optimized-resume.${format}`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}

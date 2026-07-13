@@ -19,6 +19,7 @@ from app.repositories.resume_repository import (
     ResumeNotFoundError,
     ResumeRepositoryError,
 )
+from app.services.export_service import ResumeExportError
 from app.services.resume_storage_service import ResumeStorageError
 from app.services.resume_upload_service import ResumeUploadError
 from app.v1.router import router as v1_router
@@ -32,6 +33,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
+    expose_headers=["Content-Disposition"],
     max_age=600,
 )
 
@@ -47,9 +49,10 @@ def service_error_response(error: Exception) -> JSONResponse:
 
 
 @app.exception_handler(ResumeUploadError)
+@app.exception_handler(ResumeExportError)
 async def resume_upload_error_handler(
     request: Request,
-    error: ResumeUploadError,
+    error: ResumeUploadError | ResumeExportError,
 ) -> JSONResponse:
     logger.warning(
         "Resume upload rejected: %s %s",

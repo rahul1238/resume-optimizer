@@ -18,6 +18,7 @@ dependencies = [
   "python-multipart",
   "PyMuPDF",
   "python-docx",
+  "reportlab",
 ]
 
 [project.optional-dependencies]

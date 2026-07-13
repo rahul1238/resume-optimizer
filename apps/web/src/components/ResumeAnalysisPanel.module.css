@@ -204,6 +204,13 @@
   font-size: 0.75rem;
 }
 
+.draftActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .draftEditor {
   min-height: 560px;
   resize: vertical;
@@ -516,6 +523,10 @@
   .draftHeading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .draftActions {
+    justify-content: flex-start;
   }
 
   .rewrite p {
