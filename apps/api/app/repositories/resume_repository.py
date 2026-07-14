@@ -112,6 +112,24 @@ class ResumeRepository:
             raise ResumeRepositoryError() from error
 
     @classmethod
+    def update_extracted_metadata(
+        cls,
+        resume_id: str,
+        character_count: int,
+        page_count: int | None,
+    ) -> None:
+        try:
+            cls._client().collection(cls.collection_name).document(resume_id).update(
+                {
+                    "character_count": character_count,
+                    "page_count": page_count,
+                }
+            )
+        except (GoogleAPICallError, exceptions.FirebaseError, ValueError) as error:
+            logger.exception("Failed to update parsed resume metadata")
+            raise ResumeRepositoryError() from error
+
+    @classmethod
     def get_owned(cls, resume_id: str, owner_uid: str) -> ResumeRecord:
         try:
             snapshot = (

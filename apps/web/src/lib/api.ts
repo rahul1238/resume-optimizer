@@ -253,9 +253,14 @@ export async function saveImprovements(
 export async function downloadResumeExport(
   analysisId: string,
   format: "pdf" | "docx",
+  options: { mode?: "ats" | "preserve"; targetPages?: 1 | 2 } = {},
 ): Promise<void> {
+  const query = new URLSearchParams({
+    target_pages: String(options.targetPages ?? 1),
+  });
+  if (format === "docx") query.set("mode", options.mode ?? "ats");
   const response = await authenticatedRequest(
-    `/api/v1/analyses/${encodeURIComponent(analysisId)}/export/${format}`,
+    `/api/v1/analyses/${encodeURIComponent(analysisId)}/export/${format}?${query}`,
   );
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");
@@ -264,5 +269,5 @@ export async function downloadResumeExport(
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

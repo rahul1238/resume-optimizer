@@ -141,3 +141,30 @@ class ResumeStorageService:
             raise ResumeStorageError(
                 "Unable to retrieve parsed resume text."
             ) from error
+
+    @classmethod
+    def write_text(cls, storage_path: str, text: str) -> None:
+        try:
+            cls._client().put_object(
+                Bucket=settings.r2_bucket_name,
+                Key=storage_path,
+                Body=text.encode("utf-8"),
+                ContentType="text/plain; charset=utf-8",
+            )
+        except (BotoCoreError, ClientError, ValueError) as error:
+            raise ResumeStorageError(
+                "Unable to refresh parsed resume text."
+            ) from error
+
+    @classmethod
+    def read_bytes(cls, storage_path: str) -> bytes:
+        try:
+            response = cls._client().get_object(
+                Bucket=settings.r2_bucket_name,
+                Key=storage_path,
+            )
+            return response["Body"].read()
+        except (BotoCoreError, ClientError, ValueError) as error:
+            raise ResumeStorageError(
+                "Unable to retrieve the original resume."
+            ) from error

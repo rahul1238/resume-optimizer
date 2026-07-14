@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Response, status
 from starlette.concurrency import run_in_threadpool
@@ -152,13 +152,25 @@ async def save_improvements(
 async def export_docx(
     analysis_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    mode: Annotated[Literal["ats", "preserve"], Query()] = "ats",
+    target_pages: Annotated[int, Query(ge=1, le=2)] = 1,
 ) -> Response:
-    draft = await run_in_threadpool(
-        ResumeExportService.get_draft,
+    context = await run_in_threadpool(
+        ResumeExportService.get_context,
         current_user.uid,
         analysis_id,
     )
-    content = await run_in_threadpool(ResumeExportService.to_docx, draft)
+    if mode == "preserve":
+        content = await run_in_threadpool(
+            ResumeExportService.preserve_docx,
+            context,
+        )
+    else:
+        content = await run_in_threadpool(
+            ResumeExportService.to_docx,
+            context.draft,
+            target_pages,
+        )
     return Response(
         content=content,
         media_type=(
@@ -172,13 +184,18 @@ async def export_docx(
 async def export_pdf(
     analysis_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    target_pages: Annotated[int, Query(ge=1, le=2)] = 1,
 ) -> Response:
-    draft = await run_in_threadpool(
-        ResumeExportService.get_draft,
+    context = await run_in_threadpool(
+        ResumeExportService.get_context,
         current_user.uid,
         analysis_id,
     )
-    content = await run_in_threadpool(ResumeExportService.to_pdf, draft)
+    content = await run_in_threadpool(
+        ResumeExportService.to_pdf,
+        context.draft,
+        target_pages,
+    )
     return Response(
         content=content,
         media_type="application/pdf",

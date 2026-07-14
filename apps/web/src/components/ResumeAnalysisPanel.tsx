@@ -18,6 +18,7 @@ import styles from "./ResumeAnalysisPanel.module.css";
 
 interface Props {
   resumeId: string;
+  sourceFileType: "pdf" | "docx";
 }
 
 const ANALYSIS_ERRORS: Record<string, string> = {
@@ -44,7 +45,7 @@ function ResultList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-export default function ResumeAnalysisPanel({ resumeId }: Props) {
+export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props) {
   const [jobTitle, setJobTitle] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [jobDescription, setJobDescription] = useState("");
@@ -57,6 +58,8 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
   const [improvementSaving, setImprovementSaving] = useState(false);
   const [improvementSaved, setImprovementSaved] = useState(false);
   const [exporting, setExporting] = useState<"pdf" | "docx" | null>(null);
+  const [exportMode, setExportMode] = useState<"ats" | "preserve">("ats");
+  const [targetPages, setTargetPages] = useState<1 | 2>(1);
   const [improvementFeedback, setImprovementFeedback] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -178,6 +181,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
           : undefined,
       );
       setImprovement(response);
+      setImprovementSaved(true);
       setImprovementFeedback({});
     } catch (caught: unknown) {
       setError(caught instanceof ApiClientError
@@ -241,11 +245,22 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
   };
 
   const handleExport = async (format: "pdf" | "docx") => {
-    if (!analysis) return;
+    if (!analysis || !improvement) return;
     setError(null);
     setExporting(format);
     try {
-      await downloadResumeExport(analysis.analysis_id, format);
+      if (!improvementSaved) {
+        const saved = await saveImprovements(
+          analysis.analysis_id,
+          improvement.result,
+        );
+        setImprovement(saved);
+        setImprovementSaved(true);
+      }
+      await downloadResumeExport(analysis.analysis_id, format, {
+        mode: exportMode,
+        targetPages,
+      });
     } catch (caught: unknown) {
       setError(caught instanceof ApiClientError
         ? caught.message
@@ -388,6 +403,12 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
             )}
           </div>
 
+          {error && (
+            <div className={`alert alert-error ${styles.improvementAlert}`} role="alert">
+              {error}
+            </div>
+          )}
+
           {improvement ? (
             <div className={styles.improvementBody}>
               <section className={styles.suggestionBlock}>
@@ -397,13 +418,43 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                     <p>Edit this draft directly. Manual saves do not call Gemini.</p>
                   </div>
                   <div className={styles.draftActions}>
+                    <label className={styles.exportOption}>
+                      <span>Layout</span>
+                      <select
+                        className="form-input"
+                        value={exportMode}
+                        onChange={(event) => setExportMode(
+                          event.target.value as "ats" | "preserve",
+                        )}
+                        disabled={exporting !== null}
+                      >
+                        <option value="ats">ATS optimized</option>
+                        <option value="preserve" disabled={sourceFileType !== "docx"}>
+                          Preserve original DOCX
+                        </option>
+                      </select>
+                    </label>
+                    <label className={styles.exportOption}>
+                      <span>Target</span>
+                      <select
+                        className="form-input"
+                        value={targetPages}
+                        onChange={(event) => setTargetPages(
+                          Number(event.target.value) as 1 | 2,
+                        )}
+                        disabled={exporting !== null || exportMode === "preserve"}
+                      >
+                        <option value={1}>1 page</option>
+                        <option value={2}>2 pages</option>
+                      </select>
+                    </label>
                     <button type="button" className="btn btn-ghost btn-sm" onClick={handleSaveImprovements} disabled={improvementSaving || !improvement.result.optimized_resume_draft.trim()}>
                       {improvementSaving ? "Saving…" : improvementSaved ? "Saved" : "Save draft"}
                     </button>
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => handleExport("docx")} disabled={exporting !== null || !improvement.result.optimized_resume_draft.trim()}>
                       {exporting === "docx" ? "Preparing…" : "Download DOCX"}
                     </button>
-                    <button type="button" className="btn btn-primary btn-sm" onClick={() => handleExport("pdf")} disabled={exporting !== null || !improvement.result.optimized_resume_draft.trim()}>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => handleExport("pdf")} disabled={exporting !== null || !improvement.result.optimized_resume_draft.trim()} title="PDF always uses the ATS-optimized layout">
                       {exporting === "pdf" ? "Preparing…" : "Download PDF"}
                     </button>
                   </div>

@@ -90,16 +90,6 @@ class ResumeUploadService:
 
         content_sha256 = sha256(content).hexdigest()
         existing = ResumeRepository.find_owned_by_hash(owner_uid, content_sha256)
-        if existing:
-            return ParsedResume(
-                resume_id=existing.resume_id,
-                filename=existing.filename,
-                file_type=existing.file_type,
-                page_count=existing.page_count,
-                storage_path=existing.original_storage_path,
-                text_storage_path=existing.text_storage_path,
-                text=ResumeStorageService.read_text(existing.text_storage_path),
-            )
 
         try:
             if extension == ".pdf":
@@ -113,6 +103,25 @@ class ResumeUploadService:
 
         if not text:
             raise ResumeTextNotFoundError()
+
+        if existing:
+            stored_text = ResumeStorageService.read_text(existing.text_storage_path)
+            if stored_text != text:
+                ResumeStorageService.write_text(existing.text_storage_path, text)
+            ResumeRepository.update_extracted_metadata(
+                existing.resume_id,
+                len(text),
+                page_count,
+            )
+            return ParsedResume(
+                resume_id=existing.resume_id,
+                filename=existing.filename,
+                file_type=existing.file_type,
+                page_count=page_count,
+                storage_path=existing.original_storage_path,
+                text_storage_path=existing.text_storage_path,
+                text=text,
+            )
 
         resume_id = str(uuid5(NAMESPACE_URL, f"{owner_uid}:{content_sha256}"))
         stored_resume = ResumeStorageService.store_original(

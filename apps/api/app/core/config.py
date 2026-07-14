@@ -28,7 +28,15 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"),
     )
     gemini_model: str = "gemini-3.5-flash"
+    gemini_fallback_models: list[str] = [
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+    ]
     gemini_timeout_seconds: int = 60
+    tectonic_binary: str = "tectonic"
+    tectonic_only_cached: bool = True
+    latex_compile_timeout_seconds: int = 30
     max_job_description_characters: int = 30_000
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

@@ -162,6 +162,7 @@ export default function DashboardPage() {
                   <ResumeAnalysisPanel
                     key={result.resume_id}
                     resumeId={result.resume_id}
+                    sourceFileType={result.file_type}
                   />
                 </>
               ) : (
