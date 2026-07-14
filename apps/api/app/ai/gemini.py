@@ -145,9 +145,21 @@ target job using only facts already supported by the resume. Never invent skills
 metrics, employers, responsibilities, dates, or qualifications. Preserve the
 candidate's meaning. Rewrite up to eight weak experience bullets when identifiable.
 Skills to emphasize must already appear in the resume. Put any requested job skill
-that is unsupported by the resume in integrity_notes instead of adding it. When a
-current draft and user feedback are provided, revise the draft according to those
-editing preferences, but treat them as preferences rather than factual evidence.
+that is unsupported by the resume in integrity_notes instead of adding it.
+
+For each proposed edit, add one atomic change_set item. Include the exact original
+text, the suggested replacement, its target section, a concise reason, and up to
+five exact facts from the resume as evidence. Set requires_confirmation to true
+when the evidence is indirect or incomplete. Use confidence conservatively.
+For an important job requirement that may be relevant but is not supported, create
+a clarification_question that asks about the candidate's real experience instead
+of adding the requirement. Do not ask about requirements that are clearly
+irrelevant. Return structured_resume with the complete draft divided into header
+and sections; every structured item must also appear in optimized_resume_draft.
+
+When a current draft and user feedback are provided, revise the draft according
+to those editing preferences, but treat them as preferences rather than factual
+evidence.
 Also produce optimized_resume_draft as a complete, plain-text resume ready for
 editing. Preserve all useful factual content and recognizable section structure.
 Preserve every supported URL from the resume. Show profile links as ATS-readable

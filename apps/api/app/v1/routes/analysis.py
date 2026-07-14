@@ -13,6 +13,8 @@ from app.v1.schemas.analysis import (
     AnalysisCreateResponse,
     AnalysisDetailResponse,
     AnalysisSummaryResponse,
+    KeywordCoverageRequest,
+    KeywordCoverageResponse,
 )
 from app.v1.schemas.improvement import (
     ImprovementGenerateRequest,
@@ -88,6 +90,25 @@ async def get_analysis(
         analysis_id,
     )
     return detail_response(record)
+
+
+@router.post("/{analysis_id}/coverage", response_model=KeywordCoverageResponse)
+async def calculate_keyword_coverage(
+    analysis_id: str,
+    request: KeywordCoverageRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> KeywordCoverageResponse:
+    score, covered, missing = await run_in_threadpool(
+        AnalysisService.coverage,
+        current_user.uid,
+        analysis_id,
+        request.draft,
+    )
+    return KeywordCoverageResponse(
+        coverage_score=score,
+        covered_keywords=covered,
+        missing_keywords=missing,
+    )
 
 
 @router.delete("/{analysis_id}", status_code=status.HTTP_204_NO_CONTENT)

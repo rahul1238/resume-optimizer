@@ -66,10 +66,49 @@ export interface AnalysisDetail extends AnalysisSummary {
   result: ResumeAnalysisResult;
 }
 
+export interface KeywordCoverage {
+  coverage_score: number;
+  covered_keywords: string[];
+  missing_keywords: string[];
+}
+
 export interface BulletRewrite {
   original: string;
   suggested: string;
   reason: string;
+}
+
+export interface StructuredResumeSection {
+  section_id: string;
+  heading: string;
+  items: string[];
+}
+
+export interface StructuredResumeDocument {
+  schema_version: number;
+  header: string[];
+  sections: StructuredResumeSection[];
+}
+
+export interface ResumeChange {
+  change_id: string;
+  change_type: "summary" | "bullet" | "skill" | "section";
+  status: "proposed" | "accepted" | "rejected";
+  target_section: string;
+  original: string;
+  suggested: string;
+  reason: string;
+  evidence: string[];
+  confidence: number;
+  requires_confirmation: boolean;
+}
+
+export interface ClarificationQuestion {
+  question_id: string;
+  requirement: string;
+  question: string;
+  status: "unanswered" | "answered" | "skipped";
+  answer: string;
 }
 
 export interface ResumeImprovementResult {
@@ -80,6 +119,9 @@ export interface ResumeImprovementResult {
   skills_to_emphasize: string[];
   ats_recommendations: string[];
   integrity_notes: string[];
+  structured_resume: StructuredResumeDocument | null;
+  change_set: ResumeChange[];
+  clarification_questions: ClarificationQuestion[];
 }
 
 export interface ImprovementResponse {
@@ -206,6 +248,23 @@ export async function listAnalyses(resumeId?: string): Promise<AnalysisSummary[]
 export async function getAnalysis(analysisId: string): Promise<AnalysisDetail> {
   const response = await authenticatedRequest(
     `/api/v1/analyses/${encodeURIComponent(analysisId)}`,
+  );
+  return response.json();
+}
+
+export async function calculateKeywordCoverage(
+  analysisId: string,
+  draft: string,
+  signal?: AbortSignal,
+): Promise<KeywordCoverage> {
+  const response = await authenticatedRequest(
+    `/api/v1/analyses/${encodeURIComponent(analysisId)}/coverage`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draft }),
+      signal,
+    },
   );
   return response.json();
 }

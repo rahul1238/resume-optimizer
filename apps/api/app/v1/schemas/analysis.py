@@ -47,3 +47,13 @@ class AnalysisSummaryResponse(BaseModel):
 class AnalysisDetailResponse(AnalysisSummaryResponse):
     job_description: str
     result: ResumeAnalysisResult
+
+
+class KeywordCoverageRequest(BaseModel):
+    draft: str = Field(min_length=1, max_length=50_000)
+
+
+class KeywordCoverageResponse(BaseModel):
+    coverage_score: int = Field(ge=0, le=100)
+    covered_keywords: list[str]
+    missing_keywords: list[str]

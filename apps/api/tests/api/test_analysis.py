@@ -150,3 +150,25 @@ def test_get_analysis_hides_unowned_records(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert response.status_code == 404
     assert response.json()["code"] == "analysis_not_found"
+
+
+def test_keyword_coverage_is_calculated_without_ai(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        AnalysisService,
+        "coverage",
+        lambda *_args: (67, ["Python", "C++"], ["Kubernetes"]),
+    )
+
+    response = client.post(
+        "/api/v1/analyses/analysis-id/coverage",
+        json={"draft": "Built Python and C++ services."},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "coverage_score": 67,
+        "covered_keywords": ["Python", "C++"],
+        "missing_keywords": ["Kubernetes"],
+    }

@@ -81,6 +81,18 @@ def test_ats_exports_are_text_parseable_and_fit_one_page() -> None:
     )
 
 
+@pytest.mark.parametrize("profile", ResumeExportService.profiles)
+def test_every_pdf_layout_profile_has_cached_font_metrics(profile) -> None:
+    content = ResumeExportService._render_pdf(
+        ResumeExportService.structure(SAMPLE_DRAFT),
+        profile,
+    )
+
+    with fitz.open(stream=content, filetype="pdf") as document:
+        assert len(document) >= 1
+        assert "Jordan Lee" in document[0].get_text()
+
+
 def test_preserve_docx_keeps_style_and_applies_exact_rewrite(
     monkeypatch,
 ) -> None:

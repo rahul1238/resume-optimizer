@@ -5,12 +5,14 @@ import {
   ApiClientError,
   AnalysisDetail,
   AnalysisSummary,
+  calculateKeywordCoverage,
   createAnalysis,
   deleteAnalysis,
   downloadResumeExport,
   getAnalysis,
   generateImprovements,
   ImprovementResponse,
+  KeywordCoverage,
   listAnalyses,
   saveImprovements,
 } from "@/lib/api";
@@ -61,6 +63,8 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
   const [exportMode, setExportMode] = useState<"ats" | "preserve">("ats");
   const [targetPages, setTargetPages] = useState<1 | 2>(1);
   const [improvementFeedback, setImprovementFeedback] = useState<Record<string, string>>({});
+  const [coverage, setCoverage] = useState<KeywordCoverage | null>(null);
+  const [coverageLoading, setCoverageLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,6 +86,34 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
       });
     return () => { active = false; };
   }, [resumeId]);
+
+  useEffect(() => {
+    if (!analysis || !improvement?.result.optimized_resume_draft.trim()) {
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setCoverageLoading(true);
+      calculateKeywordCoverage(
+        analysis.analysis_id,
+        improvement.result.optimized_resume_draft,
+        controller.signal,
+      )
+        .then(setCoverage)
+        .catch((caught: unknown) => {
+          if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+            setCoverage(null);
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setCoverageLoading(false);
+        });
+    }, 400);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [analysis, improvement?.result.optimized_resume_draft]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -173,7 +205,14 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
     try {
       const feedback = Object.entries(improvementFeedback)
         .filter(([, value]) => value.trim())
-        .map(([section, value]) => `${section}: ${value.trim()}`);
+        .map(([section, value]) => {
+          if (section.startsWith("question-") && improvement) {
+            const index = Number(section.slice("question-".length));
+            const question = improvement.result.clarification_questions[index];
+            if (question) return `Answer to "${question.question}": ${value.trim()}`;
+          }
+          return `${section}: ${value.trim()}`;
+        });
       const response = await generateImprovements(
         analysis.analysis_id,
         revise && improvement
@@ -196,25 +235,90 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
     setImprovementFeedback((previous) => ({ ...previous, [key]: value }));
   };
 
-  const updateSuggestedSummary = (value: string) => {
-    setImprovementSaved(false);
-    setImprovement((current) => current ? {
-      ...current,
-      result: { ...current.result, suggested_summary: value },
-    } : current);
-  };
-
-  const updateSuggestedBullet = (index: number, value: string) => {
+  const updateClarificationAnswer = (index: number, value: string) => {
+    updateImprovementFeedback(`question-${index}`, value);
     setImprovementSaved(false);
     setImprovement((current) => current ? {
       ...current,
       result: {
         ...current.result,
-        bullet_rewrites: current.result.bullet_rewrites.map((rewrite, itemIndex) => (
-          itemIndex === index ? { ...rewrite, suggested: value } : rewrite
+        clarification_questions: current.result.clarification_questions.map(
+          (question, itemIndex) => itemIndex === index
+            ? {
+                ...question,
+                answer: value,
+                status: value.trim() ? "answered" : "unanswered",
+              }
+            : question,
+        ),
+      },
+    } : current);
+  };
+
+  const replaceFirst = (source: string, current: string, replacement: string) => {
+    if (!current || !source.includes(current)) return source;
+    return source.replace(current, replacement);
+  };
+
+  const updateAtomicChange = (index: number, value: string) => {
+    setImprovementSaved(false);
+    setImprovement((current) => current ? {
+      ...current,
+      result: {
+        ...current.result,
+        optimized_resume_draft: replaceFirst(
+          current.result.optimized_resume_draft,
+          current.result.change_set[index].suggested,
+          value,
+        ),
+        change_set: current.result.change_set.map((change, itemIndex) => (
+          itemIndex === index ? { ...change, suggested: value } : change
+        )),
+        bullet_rewrites: current.result.bullet_rewrites.map((rewrite) => (
+          rewrite.original === current.result.change_set[index].original
+            ? { ...rewrite, suggested: value }
+            : rewrite
         )),
       },
     } : current);
+  };
+
+  const reviewAtomicChange = (
+    index: number,
+    status: "accepted" | "rejected",
+  ) => {
+    setImprovementSaved(false);
+    setImprovement((current) => {
+      if (!current) return current;
+      const selected = current.result.change_set[index];
+      const from = status === "accepted" ? selected.original : selected.suggested;
+      const to = status === "accepted" ? selected.suggested : selected.original;
+      return {
+        ...current,
+        result: {
+          ...current.result,
+          optimized_resume_draft: replaceFirst(
+            current.result.optimized_resume_draft,
+            from,
+            to,
+          ),
+          suggested_summary: selected.change_type === "summary" && status === "accepted"
+            ? selected.suggested
+            : current.result.suggested_summary,
+          bullet_rewrites: current.result.bullet_rewrites.map((rewrite) => (
+            rewrite.original === selected.original
+              ? {
+                  ...rewrite,
+                  suggested: status === "accepted" ? selected.suggested : rewrite.original,
+                }
+              : rewrite
+          )),
+          change_set: current.result.change_set.map((change, itemIndex) => (
+            itemIndex === index ? { ...change, status } : change
+          )),
+        },
+      };
+    });
   };
 
   const updateOptimizedDraft = (value: string) => {
@@ -389,6 +493,16 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
               <p className={styles.eyebrow}>Targeted editing</p>
               <h3>Resume improvements</h3>
             </div>
+            {improvement && (
+              <div className={styles.coverageSummary} aria-live="polite">
+                <strong>
+                  {coverageLoading ? "…" : coverage
+                    ? `${coverage.coverage_score}%`
+                    : "N/A"}
+                </strong>
+                <span>Keyword coverage</span>
+              </div>
+            )}
             {!improvement && (
               <button
                 type="button"
@@ -411,6 +525,22 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
 
           {improvement ? (
             <div className={styles.improvementBody}>
+              {coverage && (
+                <section className={styles.coverageBar}>
+                  <div>
+                    <strong>{coverage.covered_keywords.length}</strong>
+                    <span>Covered</span>
+                  </div>
+                  <div>
+                    <strong>{coverage.missing_keywords.length}</strong>
+                    <span>Missing</span>
+                  </div>
+                  <p>
+                    Deterministic phrase coverage from the saved job keywords.
+                    No AI call is used.
+                  </p>
+                </section>
+              )}
               <section className={styles.suggestionBlock}>
                 <div className={styles.draftHeading}>
                   <div>
@@ -468,60 +598,101 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
                 />
               </section>
 
-              <section className={styles.suggestionBlock}>
-                <h4>Suggested summary</h4>
-                <textarea
-                  className={`form-input ${styles.suggestionEditor}`}
-                  value={improvement.result.suggested_summary}
-                  onChange={(event) => updateSuggestedSummary(event.target.value)}
-                  maxLength={1500}
-                  aria-label="Edit suggested summary"
-                />
-                <small>{improvement.result.summary_reason}</small>
-                <label className={styles.feedbackField}>
-                  <span>Feedback for this summary</span>
-                  <textarea
-                    className="form-input"
-                    value={improvementFeedback.summary ?? ""}
-                    onChange={(event) => updateImprovementFeedback("summary", event.target.value)}
-                    maxLength={1000}
-                    placeholder="For example: make it shorter and emphasize backend ownership"
-                  />
-                </label>
-              </section>
-
-              {improvement.result.bullet_rewrites.length > 0 && (
+              {improvement.result.clarification_questions.length > 0 && (
                 <section className={styles.suggestionBlock}>
-                  <h4>Experience bullet rewrites</h4>
+                  <div className={styles.reviewHeading}>
+                    <div>
+                      <h4>Confirm your experience</h4>
+                      <p>Answers are used as context when you regenerate.</p>
+                    </div>
+                    <span>{improvement.result.clarification_questions.length}</span>
+                  </div>
+                  <div className={styles.clarifications}>
+                    {improvement.result.clarification_questions.map((question, index) => (
+                      <label key={question.question_id || `${question.requirement}-${index}`} className={styles.clarification}>
+                        <span>{question.requirement}</span>
+                        <strong>{question.question}</strong>
+                        <textarea
+                          className="form-input"
+                          value={improvementFeedback[`question-${index}`] ?? question.answer}
+                          onChange={(event) => updateClarificationAnswer(
+                            index,
+                            event.target.value,
+                          )}
+                          maxLength={1000}
+                          placeholder="Describe only experience you actually have"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {improvement.result.change_set.length > 0 && (
+                <section className={styles.suggestionBlock}>
+                  <div className={styles.reviewHeading}>
+                    <div>
+                      <h4>Review proposed changes</h4>
+                      <p>Accept, edit, or reject each change before export.</p>
+                    </div>
+                    <span>
+                      {improvement.result.change_set.filter(
+                        (change) => change.status === "proposed",
+                      ).length} pending
+                    </span>
+                  </div>
                   <div className={styles.rewrites}>
-                    {improvement.result.bullet_rewrites.map((rewrite, index) => (
-                      <div key={`${rewrite.original}-${index}`} className={styles.rewrite}>
-                        <p><span>Original</span>{rewrite.original}</p>
+                    {improvement.result.change_set.map((change, index) => (
+                      <article
+                        key={change.change_id || `${change.original}-${index}`}
+                        className={`${styles.rewrite} ${styles[`change_${change.status}`]}`}
+                      >
+                        <div className={styles.changeMeta}>
+                          <span>{change.target_section || change.change_type}</span>
+                          <span>{Math.round(change.confidence * 100)}% confidence</span>
+                        </div>
+                        {change.original && (
+                          <p><span>Original</span>{change.original}</p>
+                        )}
                         <div className={styles.rewriteEditor}>
                           <span>Suggested</span>
                           <textarea
                             className="form-input"
-                            value={rewrite.suggested}
-                            onChange={(event) => updateSuggestedBullet(index, event.target.value)}
-                            maxLength={1200}
-                            aria-label={`Edit suggested bullet ${index + 1}`}
+                            value={change.suggested}
+                            onChange={(event) => updateAtomicChange(index, event.target.value)}
+                            maxLength={1500}
+                            aria-label={`Edit proposed change ${index + 1}`}
                           />
                         </div>
-                        <small>{rewrite.reason}</small>
-                        <label className={styles.feedbackField}>
-                          <span>Feedback for this bullet</span>
-                          <textarea
-                            className="form-input"
-                            value={improvementFeedback[`bullet-${index}`] ?? ""}
-                            onChange={(event) => updateImprovementFeedback(
-                              `bullet-${index}`,
-                              event.target.value,
-                            )}
-                            maxLength={1000}
-                            placeholder="Describe what should change"
-                          />
-                        </label>
-                      </div>
+                        <small>{change.reason}</small>
+                        {change.evidence.length > 0 && (
+                          <div className={styles.evidence}>
+                            <span>Evidence</span>
+                            <p>{change.evidence.join(" · ")}</p>
+                          </div>
+                        )}
+                        {change.requires_confirmation && (
+                          <p className={styles.confirmationNote}>Confirm this claim before accepting.</p>
+                        )}
+                        <div className={styles.changeActions}>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => reviewAtomicChange(index, "rejected")}
+                            disabled={change.status === "rejected"}
+                          >
+                            Reject
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={() => reviewAtomicChange(index, "accepted")}
+                            disabled={change.status === "accepted"}
+                          >
+                            {change.requires_confirmation ? "Confirm and accept" : "Accept"}
+                          </button>
+                        </div>
+                      </article>
                     ))}
                   </div>
                 </section>
