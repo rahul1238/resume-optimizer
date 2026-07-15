@@ -4,6 +4,31 @@
   gap: 12px;
 }
 
+.profileFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.profileFields label {
+  display: grid;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.profileFields small {
+  color: var(--color-text-faint);
+  font-weight: 400;
+}
+
+@media (max-width: 640px) {
+  .profileFields {
+    grid-template-columns: 1fr;
+  }
+}
+
 .dropzone {
   position: relative;
   display: flex;

@@ -65,6 +65,8 @@ export default function DashboardPage() {
     setResult(r);
     const summary: ResumeSummary = {
       resume_id: r.resume_id,
+      title: r.title,
+      tags: r.tags,
       filename: r.filename,
       file_type: r.file_type,
       page_count: r.page_count,
@@ -210,13 +212,18 @@ export default function DashboardPage() {
                             </span>
                             <div className={styles.historyItemMeta}>
                               <span className={styles.historyFilename}>
-                                {entry.resume.filename}
+                                {entry.resume.title || entry.resume.filename}
                               </span>
                               <span className={styles.historyTime}>
                                 {entry.resume.created_at
                                   ? new Date(entry.resume.created_at).toLocaleDateString()
                                   : "Saved"} · {entry.resume.character_count.toLocaleString()} chars
                               </span>
+                              {entry.resume.tags.length > 0 && (
+                                <span className={styles.historyTime}>
+                                  {entry.resume.tags.join(" · ")}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </button>

@@ -23,6 +23,8 @@ export default function ResumeUploader({ onResult }: Props) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [tags, setTags] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = async (file: File) => {
@@ -42,7 +44,10 @@ export default function ResumeUploader({ onResult }: Props) {
     setIsUploading(true);
 
     try {
-      const result = await uploadResume(file);
+      const result = await uploadResume(file, {
+        title,
+        tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+      });
       onResult(result);
     } catch (err: unknown) {
       const msg = err instanceof ApiClientError
@@ -83,6 +88,30 @@ export default function ResumeUploader({ onResult }: Props) {
 
   return (
     <div className={styles.wrapper}>
+      <div className={styles.profileFields}>
+        <label>
+          <span>Resume name</span>
+          <input
+            className="form-input"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Master full-stack resume"
+            maxLength={120}
+            disabled={isUploading}
+          />
+        </label>
+        <label>
+          <span>Tags <small>optional, comma separated</small></span>
+          <input
+            className="form-input"
+            value={tags}
+            onChange={(event) => setTags(event.target.value)}
+            placeholder="backend, platform, senior"
+            maxLength={250}
+            disabled={isUploading}
+          />
+        </label>
+      </div>
       <div
         id="resume-dropzone"
         className={`${styles.dropzone} ${isDragging ? styles.dragging : ""} ${isUploading ? styles.uploading : ""}`}

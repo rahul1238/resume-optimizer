@@ -6,6 +6,8 @@ const API_BASE = (
 
 export interface ResumeUploadResponse {
   resume_id: string;
+  title: string;
+  tags: string[];
   filename: string;
   file_type: "pdf" | "docx";
   page_count: number | null;
@@ -16,6 +18,8 @@ export interface ResumeUploadResponse {
 
 export interface ResumeSummary {
   resume_id: string;
+  title: string;
+  tags: string[];
   filename: string;
   file_type: "pdf" | "docx";
   page_count: number | null;
@@ -210,9 +214,14 @@ export async function checkHealth(): Promise<{ code: number; status: string }> {
   return res.json();
 }
 
-export async function uploadResume(file: File): Promise<ResumeUploadResponse> {
+export async function uploadResume(
+  file: File,
+  profile: { title?: string; tags?: string[] } = {},
+): Promise<ResumeUploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
+  if (profile.title?.trim()) formData.append("title", profile.title.trim());
+  if (profile.tags?.length) formData.append("tags", profile.tags.join(","));
   const response = await authenticatedRequest("/api/v1/resumes/upload", {
     method: "POST",
     body: formData,
