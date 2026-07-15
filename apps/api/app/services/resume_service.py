@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from app.models.resume import ResumeRecord
 from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.improvement_repository import ImprovementRepository
@@ -23,7 +25,20 @@ class ResumeService:
             storage_path=record.original_storage_path,
             text_storage_path=record.text_storage_path,
             text=text,
+            title=record.title,
+            tags=record.tags,
         )
+
+    @staticmethod
+    def update_profile(
+        owner_uid: str,
+        resume_id: str,
+        title: str,
+        tags: list[str],
+    ) -> ResumeRecord:
+        ResumeRepository.get_owned(resume_id, owner_uid)
+        ResumeRepository.update_profile(resume_id, title, tags)
+        return ResumeRepository.get_owned(resume_id, owner_uid)
 
     @staticmethod
     def delete(owner_uid: str, resume_id: str) -> None:

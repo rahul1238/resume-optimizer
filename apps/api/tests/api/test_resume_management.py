@@ -46,6 +46,8 @@ def test_list_resumes_returns_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
     assert response.json()[0]["resume_id"] == "resume-id"
     assert "text" not in response.json()[0]
     assert "original_storage_path" not in response.json()[0]
+    assert response.json()[0]["title"] == ""
+    assert response.json()[0]["tags"] == []
 
 
 def test_get_resume_returns_extracted_text(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -79,6 +81,27 @@ def test_delete_resume_returns_no_content(monkeypatch: pytest.MonkeyPatch) -> No
     assert response.status_code == 204
     assert response.content == b""
     assert deleted == [("test-user-id", "resume-id")]
+
+
+def test_update_resume_profile_returns_tags(monkeypatch: pytest.MonkeyPatch) -> None:
+    updated = record()
+    updated = ResumeRecord(
+        **{
+            **updated.__dict__,
+            "title": "Backend Master",
+            "tags": ("backend", "python"),
+        }
+    )
+    monkeypatch.setattr(ResumeService, "update_profile", lambda *_args: updated)
+
+    response = client.patch(
+        "/api/v1/resumes/resume-id",
+        json={"title": " Backend Master ", "tags": ["Backend", "python"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Backend Master"
+    assert response.json()["tags"] == ["backend", "python"]
 
 
 def test_delete_cors_preflight_allows_the_local_frontend() -> None:

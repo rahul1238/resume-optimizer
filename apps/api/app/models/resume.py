@@ -14,4 +14,6 @@ class ResumeRecord:
     original_storage_path: str
     text_storage_path: str
     content_sha256: str | None = None
+    title: str = ""
+    tags: tuple[str, ...] = ()
     created_at: datetime | None = None

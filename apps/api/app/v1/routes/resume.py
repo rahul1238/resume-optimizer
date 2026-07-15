@@ -1,13 +1,27 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Response, UploadFile, status
 from starlette.concurrency import run_in_threadpool
 
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.core.config import settings
 from app.services.resume_service import ResumeService
 from app.services.resume_upload_service import ResumeUploadService
-from app.v1.schemas.resume import ResumeSummaryResponse, ResumeUploadResponse
+from app.v1.schemas.resume import (
+    ResumeProfileUpdateRequest,
+    ResumeSummaryResponse,
+    ResumeUploadResponse,
+)
+
+
+def clean_upload_tags(value: str) -> list[str]:
+    return list(
+        dict.fromkeys(
+            tag.strip().lower()
+            for tag in value.split(",")
+            if tag.strip()
+        )
+    )[:10]
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
 
@@ -25,6 +39,8 @@ async def list_resumes(
             page_count=record.page_count,
             character_count=record.character_count,
             created_at=record.created_at,
+            title=record.title,
+            tags=list(record.tags),
         )
         for record in records
     ]
@@ -44,6 +60,33 @@ async def get_resume(
         storage_path=resume.storage_path,
         character_count=len(resume.text),
         text=resume.text,
+        title=resume.title,
+        tags=list(resume.tags),
+    )
+
+
+@router.patch("/{resume_id}", response_model=ResumeSummaryResponse)
+async def update_resume_profile(
+    resume_id: str,
+    request: ResumeProfileUpdateRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> ResumeSummaryResponse:
+    record = await run_in_threadpool(
+        ResumeService.update_profile,
+        current_user.uid,
+        resume_id,
+        request.title,
+        request.tags,
+    )
+    return ResumeSummaryResponse(
+        resume_id=record.resume_id,
+        filename=record.filename,
+        file_type=record.file_type,
+        page_count=record.page_count,
+        character_count=record.character_count,
+        created_at=record.created_at,
+        title=record.title,
+        tags=list(record.tags),
     )
 
 
@@ -60,6 +103,8 @@ async def delete_resume(
 async def upload_resume(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     file: UploadFile = File(...),
+    title: str = Form(default="", max_length=120),
+    tags: str = Form(default="", max_length=320),
 ) -> ResumeUploadResponse:
     try:
         content = await file.read(settings.max_resume_upload_bytes + 1)
@@ -67,6 +112,8 @@ async def upload_resume(
             owner_uid=current_user.uid,
             filename=file.filename or "resume",
             content=content,
+            title=title,
+            tags=clean_upload_tags(tags),
         )
     finally:
         await file.close()
@@ -79,4 +126,6 @@ async def upload_resume(
         storage_path=parsed_resume.storage_path,
         character_count=len(parsed_resume.text),
         text=parsed_resume.text,
+        title=parsed_resume.title,
+        tags=list(parsed_resume.tags),
     )

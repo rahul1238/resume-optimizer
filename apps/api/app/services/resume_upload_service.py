@@ -69,13 +69,22 @@ class ParsedResume:
     storage_path: str
     text_storage_path: str
     text: str
+    title: str = ""
+    tags: tuple[str, ...] = ()
 
 
 class ResumeUploadService:
     allowed_extensions = {".pdf", ".docx"}
 
     @classmethod
-    def process(cls, owner_uid: str, filename: str, content: bytes) -> ParsedResume:
+    def process(
+        cls,
+        owner_uid: str,
+        filename: str,
+        content: bytes,
+        title: str = "",
+        tags: list[str] | None = None,
+    ) -> ParsedResume:
         safe_filename = Path(filename).name or "resume"
         extension = Path(safe_filename).suffix.lower()
 
@@ -105,6 +114,12 @@ class ResumeUploadService:
             raise ResumeTextNotFoundError()
 
         if existing:
+            if title.strip() or tags:
+                ResumeRepository.update_profile(
+                    existing.resume_id,
+                    title.strip() or existing.title,
+                    list(dict.fromkeys(tags or existing.tags)),
+                )
             stored_text = ResumeStorageService.read_text(existing.text_storage_path)
             if stored_text != text:
                 ResumeStorageService.write_text(existing.text_storage_path, text)
@@ -121,6 +136,8 @@ class ResumeUploadService:
                 storage_path=existing.original_storage_path,
                 text_storage_path=existing.text_storage_path,
                 text=text,
+                title=existing.title,
+                tags=existing.tags,
             )
 
         resume_id = str(uuid5(NAMESPACE_URL, f"{owner_uid}:{content_sha256}"))
@@ -145,6 +162,8 @@ class ResumeUploadService:
                     original_storage_path=stored_resume.storage_path,
                     text_storage_path=stored_resume.text_storage_path,
                     content_sha256=content_sha256,
+                    title=title.strip() or Path(safe_filename).stem,
+                    tags=tuple(tags or ()),
                 )
             )
         except ResumeRepositoryError:
@@ -162,4 +181,6 @@ class ResumeUploadService:
             storage_path=stored_resume.storage_path,
             text_storage_path=stored_resume.text_storage_path,
             text=text,
+            title=title.strip() or Path(safe_filename).stem,
+            tags=tuple(tags or ()),
         )

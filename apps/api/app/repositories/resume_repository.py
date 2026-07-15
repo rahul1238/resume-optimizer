@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timezone
 from functools import lru_cache
+from pathlib import Path
 
 from firebase_admin import exceptions, firestore
 from google.api_core.exceptions import GoogleAPICallError
@@ -47,6 +48,8 @@ class ResumeRepository:
             "original_storage_path": record.original_storage_path,
             "text_storage_path": record.text_storage_path,
             "content_sha256": record.content_sha256,
+            "title": record.title or Path(record.filename).stem,
+            "tags": list(record.tags),
             "created_at": firestore.SERVER_TIMESTAMP,
         }
         try:
@@ -130,6 +133,21 @@ class ResumeRepository:
             raise ResumeRepositoryError() from error
 
     @classmethod
+    def update_profile(
+        cls,
+        resume_id: str,
+        title: str,
+        tags: list[str],
+    ) -> None:
+        try:
+            cls._client().collection(cls.collection_name).document(resume_id).update(
+                {"title": title, "tags": tags}
+            )
+        except (GoogleAPICallError, exceptions.FirebaseError, ValueError) as error:
+            logger.exception("Failed to update base resume metadata")
+            raise ResumeRepositoryError() from error
+
+    @classmethod
     def get_owned(cls, resume_id: str, owner_uid: str) -> ResumeRecord:
         try:
             snapshot = (
@@ -161,5 +179,7 @@ class ResumeRepository:
             original_storage_path=data["original_storage_path"],
             text_storage_path=data["text_storage_path"],
             content_sha256=data.get("content_sha256"),
+            title=str(data.get("title") or Path(str(data["filename"])).stem),
+            tags=tuple(str(tag) for tag in data.get("tags", []) if str(tag).strip()),
             created_at=data.get("created_at"),
         )
