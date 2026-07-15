@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class ResumeLayoutSettings(BaseModel):
+    template: Literal["classic", "compact", "technical"] = "classic"
     page_format: Literal["a4", "letter"] = "a4"
     heading_font: Literal["sans", "serif"] = "sans"
     body_font: Literal["sans", "serif"] = "sans"

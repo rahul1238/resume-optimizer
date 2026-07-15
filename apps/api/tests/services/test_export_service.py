@@ -1,4 +1,5 @@
 import fitz
+import pytest
 
 from app.ai.schemas import ResumeImprovementResult
 from app.models.layout import ResumeLayoutSettings
@@ -70,8 +71,12 @@ def test_latex_source_uses_selected_ats_layout() -> None:
     assert r"\fontsize{11.0}{14.30}\selectfont" in source
 
 
-def test_pdf_is_text_parseable_and_preserves_links() -> None:
-    pdf = ResumeExportService.to_pdf(SAMPLE_DRAFT, ResumeLayoutSettings())
+@pytest.mark.parametrize("template", ["classic", "compact", "technical"])
+def test_pdf_templates_are_text_parseable_and_preserve_links(template) -> None:
+    pdf = ResumeExportService.to_pdf(
+        SAMPLE_DRAFT,
+        ResumeLayoutSettings(template=template),
+    )
 
     with fitz.open(stream=pdf, filetype="pdf") as document:
         extracted = "\n".join(page.get_text() for page in document)
@@ -81,6 +86,24 @@ def test_pdf_is_text_parseable_and_preserves_links() -> None:
     assert any(
         link.get("uri") == "https://linkedin.com/in/jordanlee" for link in links
     )
+
+
+def test_templates_change_layout_without_changing_resume_content() -> None:
+    resume = ResumeExportService.structure(SAMPLE_DRAFT)
+    sources = {
+        template: ResumeExportService._latex_source(
+            resume,
+            ResumeLayoutSettings(template=template),
+        )
+        for template in ("classic", "compact", "technical")
+    }
+
+    assert r"\begin{center}" in sources["classic"]
+    assert r"\titlerule" not in sources["compact"]
+    assert r"\begin{flushleft}" in sources["technical"]
+    for source in sources.values():
+        assert "Jordan Lee" in source
+        assert "Reduced deployment time by 40" in source
 
 
 def test_restores_links_missing_from_cached_optimized_draft() -> None:

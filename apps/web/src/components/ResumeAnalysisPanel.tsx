@@ -136,6 +136,63 @@ function serializeResume(document: StructuredResumeDocument): string {
   return [...document.header, ...sections].join("\n\n");
 }
 
+const LAYOUT_PRESETS: Record<
+  ResumeLayoutSettings["template"],
+  ResumeLayoutSettings
+> = {
+  classic: {
+    template: "classic",
+    page_format: "a4",
+    heading_font: "serif",
+    body_font: "serif",
+    heading_size: 11,
+    body_size: 10,
+    name_size: 18,
+    line_spacing: 1.2,
+    margin_top: 0.55,
+    margin_right: 0.6,
+    margin_bottom: 0.55,
+    margin_left: 0.6,
+    section_spacing: 8,
+    heading_content_spacing: 3.5,
+    block_spacing: 2.5,
+  },
+  compact: {
+    template: "compact",
+    page_format: "a4",
+    heading_font: "sans",
+    body_font: "sans",
+    heading_size: 10.5,
+    body_size: 9.5,
+    name_size: 16,
+    line_spacing: 1.1,
+    margin_top: 0.4,
+    margin_right: 0.45,
+    margin_bottom: 0.4,
+    margin_left: 0.45,
+    section_spacing: 4,
+    heading_content_spacing: 2,
+    block_spacing: 1,
+  },
+  technical: {
+    template: "technical",
+    page_format: "a4",
+    heading_font: "sans",
+    body_font: "sans",
+    heading_size: 11,
+    body_size: 10,
+    name_size: 17,
+    line_spacing: 1.2,
+    margin_top: 0.5,
+    margin_right: 0.55,
+    margin_bottom: 0.5,
+    margin_left: 0.55,
+    section_spacing: 6,
+    heading_content_spacing: 3,
+    block_spacing: 2,
+  },
+};
+
 export default function ResumeAnalysisPanel({ resumeId }: Props) {
   const [jobTitle, setJobTitle] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -706,6 +763,16 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     setImprovement((current) => current ? {
       ...current,
       layout: { ...current.layout, [key]: value },
+    } : current);
+  };
+
+  const applyTemplatePreset = (template: ResumeLayoutSettings["template"]) => {
+    setImprovement((current) => current ? {
+      ...current,
+      layout: {
+        ...LAYOUT_PRESETS[template],
+        page_format: current.layout.page_format,
+      },
     } : current);
   };
 
@@ -1418,6 +1485,21 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                 </div>
                 <details className={styles.layoutPanel}>
                   <summary>Layout and typography</summary>
+                  <div className={styles.templatePresets} aria-label="Resume template">
+                    {(["classic", "compact", "technical"] as const).map((template) => (
+                      <button
+                        key={template}
+                        type="button"
+                        className={improvement.layout.template === template
+                          ? styles.templatePresetActive
+                          : ""}
+                        onClick={() => applyTemplatePreset(template)}
+                        aria-pressed={improvement.layout.template === template}
+                      >
+                        {template[0].toUpperCase() + template.slice(1)}
+                      </button>
+                    ))}
+                  </div>
                   <div className={styles.layoutGrid}>
                     <label><span>Page</span><select className="form-input" value={improvement.layout.page_format} onChange={(event) => updateLayout("page_format", event.target.value as "a4" | "letter")}><option value="a4">A4</option><option value="letter">Letter</option></select></label>
                     <label><span>Body font</span><select className="form-input" value={improvement.layout.body_font} onChange={(event) => updateLayout("body_font", event.target.value as "sans" | "serif")}><option value="sans">Sans serif</option><option value="serif">Serif</option></select></label>

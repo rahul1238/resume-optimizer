@@ -182,6 +182,7 @@ export interface TailoredResumeSummary {
 }
 
 export interface ResumeLayoutSettings {
+  template: "classic" | "compact" | "technical";
   page_format: "a4" | "letter";
   heading_font: "sans" | "serif";
   body_font: "sans" | "serif";

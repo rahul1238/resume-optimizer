@@ -316,6 +316,8 @@ class ResumeExportService:
             else "lmsans10-bold.otf"
         )
         leading = layout.body_size * layout.line_spacing
+        title_format = cls._template_title_format(layout, heading_style)
+        header_open, header_close = cls._template_header(layout)
         return rf"""\documentclass[10pt,{paper}]{{article}}
 \usepackage[top={layout.margin_top}in,right={layout.margin_right}in,bottom={layout.margin_bottom}in,left={layout.margin_left}in]{{geometry}}
 \usepackage{{fontspec}}
@@ -331,18 +333,44 @@ class ResumeExportService:
 \setlength{{\parindent}}{{0pt}}
 \setlength{{\parskip}}{{{layout.block_spacing}pt}}
 \setlist[itemize]{{leftmargin=1.15em,itemsep={layout.block_spacing}pt,topsep=1pt,parsep=0pt}}
-\titleformat{{\section}}{{{heading_style}}}{{}}{{0pt}}{{\MakeUppercase}}[\vspace{{-2pt}}\titlerule]
+{title_format}
 \titlespacing*{{\section}}{{0pt}}{{{layout.section_spacing}pt}}{{{layout.heading_content_spacing}pt}}
 \begin{{document}}
 \fontsize{{{layout.body_size}}}{{{leading:.2f}}}\selectfont
-\begin{{center}}
+{header_open}
 {{{name_style} {name}}}\\[1pt]
 {header_lines}
-\end{{center}}
+{header_close}
 \vspace{{-5pt}}
 {sections}
 \end{{document}}
 """
+
+    @staticmethod
+    def _template_title_format(
+        layout: ResumeLayoutSettings,
+        heading_style: str,
+    ) -> str:
+        if layout.template == "compact":
+            return (
+                rf"\titleformat{{\section}}{{{heading_style}}}"
+                r"{}{0pt}{\MakeUppercase}"
+            )
+        if layout.template == "technical":
+            return (
+                rf"\titleformat{{\section}}{{{heading_style}}}"
+                r"{}{0pt}{\MakeUppercase}[\vspace{-1pt}\titlerule]"
+            )
+        return (
+            rf"\titleformat{{\section}}{{{heading_style}}}"
+            r"{}{0pt}{\MakeUppercase}[\vspace{-2pt}\titlerule]"
+        )
+
+    @staticmethod
+    def _template_header(layout: ResumeLayoutSettings) -> tuple[str, str]:
+        if layout.template == "technical":
+            return "\\begin{flushleft}", "\\end{flushleft}"
+        return "\\begin{center}", "\\end{center}"
 
     @classmethod
     def _latex_section(cls, section: ResumeSection) -> str:
