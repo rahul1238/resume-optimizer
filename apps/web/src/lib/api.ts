@@ -184,6 +184,22 @@ export interface ResumeLayoutSettings {
   block_spacing: number;
 }
 
+export interface BulletOptimizationProposal {
+  proposal_id: string;
+  section_id: string;
+  group_index: number;
+  entry_label: string;
+  item_indices: number[];
+  original_bullets: string[];
+  proposed_bullets: string[];
+  target_count: number;
+  mode: "prioritize" | "consolidate" | "expand";
+  protected_keywords: string[];
+  lost_keywords: string[];
+  rationale: string;
+  can_apply: boolean;
+}
+
 interface ApiErrorBody {
   detail?: string | Array<{ msg?: string }>;
   code?: string;
@@ -386,6 +402,26 @@ export async function saveImprovementLayout(
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ layout }),
+    },
+  );
+  return response.json();
+}
+
+export async function proposeBulletOptimization(
+  analysisId: string,
+  request: {
+    section_id: string;
+    group_index: number;
+    target_count: number;
+    mode: "prioritize" | "consolidate" | "expand";
+  },
+): Promise<BulletOptimizationProposal> {
+  const response = await authenticatedRequest(
+    `/api/v1/analyses/${encodeURIComponent(analysisId)}/improvements/bullets`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
     },
   );
   return response.json();

@@ -1,6 +1,10 @@
 from typing import Protocol
 
-from app.ai.schemas import ResumeAnalysisResult, ResumeImprovementResult
+from app.ai.schemas import (
+    BulletOptimizationResult,
+    ResumeAnalysisResult,
+    ResumeImprovementResult,
+)
 
 
 class AIProviderError(Exception):
@@ -45,3 +49,12 @@ class AIProvider(Protocol):
         current_result: ResumeImprovementResult | None = None,
         feedback: list[str] | None = None,
     ) -> ResumeImprovementResult: ...
+
+    def optimize_bullets(
+        self,
+        source_bullets: list[str],
+        target_count: int,
+        mode: str,
+        job_description: str,
+        protected_keywords: list[str],
+    ) -> BulletOptimizationResult: ...

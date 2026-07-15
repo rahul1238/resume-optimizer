@@ -1,0 +1,136 @@
+from types import SimpleNamespace
+
+from app.ai.schemas import (
+    BulletOptimizationResult,
+    OptimizedBullet,
+    ResumeAnalysisResult,
+    StructuredResumeDocument,
+    StructuredResumeSection,
+)
+from app.repositories.analysis_repository import AnalysisRepository
+from app.services import bullet_optimization_service as service_module
+from app.services.bullet_optimization_service import BulletOptimizationService
+from app.services.improvement_service import ImprovementService
+
+
+def tailored_result():
+    return SimpleNamespace(
+        structured_resume=StructuredResumeDocument(
+            header=["Rahul Kumar"],
+            sections=[
+                StructuredResumeSection(
+                    section_id="section-experience",
+                    heading="EXPERIENCE",
+                    items=[
+                        "Backend Engineer | Example Tech | 2022-Present",
+                        "- Built Python and FastAPI services.",
+                        "- Improved API reliability through testing.",
+                        "- Reduced deployment time by 40%.",
+                        "Support Engineer | Earlier Co | 2020-2022",
+                        "- Resolved customer incidents.",
+                    ],
+                )
+            ],
+        )
+    )
+
+
+def analysis_result() -> ResumeAnalysisResult:
+    return ResumeAnalysisResult(
+        match_score=80,
+        summary="Strong backend alignment.",
+        strengths=["Python"],
+        matched_keywords=["Python", "FastAPI"],
+        missing_keywords=["Kubernetes"],
+        recommendations=["Prioritize relevant backend achievements."],
+    )
+
+
+def configure(monkeypatch, optimized: BulletOptimizationResult) -> None:
+    monkeypatch.setattr(ImprovementService, "get", lambda *_args: object())
+    monkeypatch.setattr(
+        ImprovementService,
+        "result",
+        lambda _record: tailored_result(),
+    )
+    monkeypatch.setattr(
+        AnalysisRepository,
+        "get_owned",
+        lambda *_args: SimpleNamespace(
+            job_description="Build Python and FastAPI services.",
+            result=analysis_result().model_dump(),
+        ),
+    )
+    provider = SimpleNamespace(optimize_bullets=lambda **_kwargs: optimized)
+    monkeypatch.setattr(service_module, "get_ai_provider", lambda: provider)
+
+
+def test_proposal_targets_one_entry_and_preserves_keywords(monkeypatch) -> None:
+    configure(
+        monkeypatch,
+        BulletOptimizationResult(
+            bullets=[
+                OptimizedBullet(
+                    text="Built Python and FastAPI services with reliable testing.",
+                    source_indices=[0, 1],
+                ),
+                OptimizedBullet(
+                    text="Reduced deployment time by 40%.",
+                    source_indices=[2],
+                ),
+            ],
+            rationale="Consolidates overlapping API evidence.",
+        ),
+    )
+
+    proposal = BulletOptimizationService.propose(
+        "user-id",
+        "analysis-id",
+        "section-experience",
+        0,
+        2,
+        "consolidate",
+    )
+
+    assert proposal.item_indices == [1, 2, 3]
+    assert proposal.entry_label.startswith("Backend Engineer")
+    assert len(proposal.proposed_bullets) == 2
+    assert proposal.protected_keywords == ["Python", "FastAPI"]
+    assert proposal.can_apply is True
+
+
+def test_proposal_blocks_when_supported_keyword_is_lost(monkeypatch) -> None:
+    configure(
+        monkeypatch,
+        BulletOptimizationResult(
+            bullets=[
+                OptimizedBullet(
+                    text="Improved API reliability through testing.",
+                    source_indices=[1],
+                )
+            ],
+            rationale="Prioritizes reliability evidence.",
+        ),
+    )
+
+    proposal = BulletOptimizationService.propose(
+        "user-id",
+        "analysis-id",
+        "section-experience",
+        0,
+        1,
+        "prioritize",
+    )
+
+    assert proposal.can_apply is False
+    assert proposal.lost_keywords == ["Python", "FastAPI"]
+
+
+def test_groups_do_not_mix_bullets_between_entries() -> None:
+    section = tailored_result().structured_resume.sections[0]
+
+    groups = BulletOptimizationService.groups(section.items)
+
+    assert len(groups) == 2
+    assert groups[0][1] == [1, 2, 3]
+    assert groups[1][1] == [5]

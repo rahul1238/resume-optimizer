@@ -9,6 +9,7 @@ from app.ai.provider import (
     AIProviderQuotaError,
 )
 from app.ai.schemas import (
+    BulletOptimizationResult,
     GeminiResumeImprovementResult,
     ResumeAnalysisResult,
     ResumeImprovementResult,
@@ -220,3 +221,50 @@ RESUME
             raise AIProviderError() from error
 
         raise AIProviderError("The improvement service returned an empty response.")
+
+    def optimize_bullets(
+        self,
+        source_bullets: list[str],
+        target_count: int,
+        mode: str,
+        job_description: str,
+        protected_keywords: list[str],
+    ) -> BulletOptimizationResult:
+        numbered = "\n".join(
+            f"{index}. {bullet}" for index, bullet in enumerate(source_bullets)
+        )
+        prompt = f"""You are an evidence-bound resume bullet editor.
+Return exactly {target_count} bullets. Use only facts contained in SOURCE BULLETS.
+Never invent metrics, tools, scope, responsibilities, or outcomes. Every output
+bullet must cite one or more zero-based source indices. The mode is {mode}:
+- prioritize: retain the strongest job-relevant source bullets and remove weaker ones.
+- consolidate: combine overlapping source bullets while preserving distinct facts.
+- expand: split compound source bullets into narrower bullets without adding or
+  duplicating facts. Cite the source bullet for every split result.
+Preserve these currently supported job keywords when they remain truthful:
+{", ".join(protected_keywords) or "None"}
+Do not add bullet markers to the returned text.
+
+JOB DESCRIPTION
+---
+{job_description}
+---
+
+SOURCE BULLETS
+---
+{numbered}
+---
+"""
+        try:
+            response = self._generate(prompt, BulletOptimizationResult)
+            if isinstance(response.parsed, BulletOptimizationResult):
+                return response.parsed
+            if response.text:
+                return BulletOptimizationResult.model_validate_json(response.text)
+        except (errors.APIError, ValueError) as error:
+            logger.exception("Gemini bullet optimization failed")
+            if isinstance(error, errors.APIError) and error.code == 429:
+                raise AIProviderQuotaError() from error
+            raise AIProviderError() from error
+
+        raise AIProviderError("The bullet optimization service returned no result.")

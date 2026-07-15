@@ -11,6 +11,10 @@ from app.models.improvement import ImprovementRecord
 from app.models.layout import ResumeLayoutSettings
 from app.repositories.analysis_repository import AnalysisNotFoundError
 from app.services.analysis_service import AnalysisService
+from app.services.bullet_optimization_service import (
+    BulletOptimizationProposal,
+    BulletOptimizationService,
+)
 from app.services.export_service import ResumeExportService
 from app.services.improvement_service import ImprovementService
 
@@ -218,6 +222,40 @@ def test_layout_update_returns_persisted_tailored_resume(
     assert response.json()["company_name"] == "Example Tech"
     assert response.json()["revision"] == 2
     assert response.json()["layout"]["body_size"] == 11
+
+
+def test_bullet_optimization_returns_reviewable_proposal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proposal = BulletOptimizationProposal(
+        proposal_id="proposal-id",
+        section_id="section-experience",
+        group_index=0,
+        entry_label="Backend Engineer | Example Tech",
+        item_indices=[1, 2, 3],
+        original_bullets=["- Built APIs.", "- Added tests.", "- Shipped faster."],
+        proposed_bullets=["- Built and tested reliable APIs.", "- Shipped faster."],
+        target_count=2,
+        mode="consolidate",
+        protected_keywords=["Python"],
+        lost_keywords=[],
+        rationale="Consolidates overlapping evidence.",
+    )
+    monkeypatch.setattr(BulletOptimizationService, "propose", lambda *_args: proposal)
+
+    response = client.post(
+        "/api/v1/analyses/analysis-id/improvements/bullets",
+        json={
+            "section_id": "section-experience",
+            "group_index": 0,
+            "target_count": 2,
+            "mode": "consolidate",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["can_apply"] is True
+    assert response.json()["item_indices"] == [1, 2, 3]
 
 
 def test_pdf_preview_renders_unsaved_draft(

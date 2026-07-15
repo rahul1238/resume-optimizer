@@ -6,6 +6,7 @@ from starlette.concurrency import run_in_threadpool
 from app.ai.schemas import ResumeAnalysisResult
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.services.analysis_service import AnalysisService
+from app.services.bullet_optimization_service import BulletOptimizationService
 from app.services.export_service import ResumeExportService
 from app.services.improvement_service import ImprovementService
 from app.v1.schemas.analysis import (
@@ -16,6 +17,10 @@ from app.v1.schemas.analysis import (
     KeywordCoverageRequest,
     KeywordCoverageResponse,
     ResumePreviewRequest,
+)
+from app.v1.schemas.bullet_optimization import (
+    BulletOptimizationRequest,
+    BulletOptimizationResponse,
 )
 from app.v1.schemas.improvement import (
     ImprovementGenerateRequest,
@@ -218,6 +223,30 @@ async def update_improvement_layout(
         request.layout,
     )
     return improvement_response(record)
+
+
+@router.post(
+    "/{analysis_id}/improvements/bullets",
+    response_model=BulletOptimizationResponse,
+)
+async def propose_bullet_optimization(
+    analysis_id: str,
+    request: BulletOptimizationRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> BulletOptimizationResponse:
+    proposal = await run_in_threadpool(
+        BulletOptimizationService.propose,
+        current_user.uid,
+        analysis_id,
+        request.section_id,
+        request.group_index,
+        request.target_count,
+        request.mode,
+    )
+    return BulletOptimizationResponse(
+        **proposal.__dict__,
+        can_apply=proposal.can_apply,
+    )
 
 
 @router.get("/{analysis_id}/export/pdf")

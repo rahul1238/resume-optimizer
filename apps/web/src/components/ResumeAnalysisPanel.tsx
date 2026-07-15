@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import {
   ApiClientError,
   ATSScan,
+  BulletOptimizationProposal,
   AnalysisDetail,
   AnalysisSummary,
   calculateKeywordCoverage,
@@ -16,10 +17,12 @@ import {
   ImprovementResponse,
   KeywordCoverage,
   listAnalyses,
+  proposeBulletOptimization,
   ResumeLayoutSettings,
   scanResumeATS,
   saveImprovementLayout,
   saveImprovements,
+  StructuredResumeDocument,
 } from "@/lib/api";
 import styles from "./ResumeAnalysisPanel.module.css";
 
@@ -89,6 +92,47 @@ function LayoutNumber({
   );
 }
 
+interface BulletGroup {
+  groupIndex: number;
+  entryLabel: string;
+  itemIndices: number[];
+  bullets: string[];
+}
+
+function bulletGroups(items: string[]): BulletGroup[] {
+  const groups: BulletGroup[] = [];
+  let entryLabel = "Entry";
+  let index = 0;
+  while (index < items.length) {
+    if (!/^\s*[-*•]\s+/.test(items[index])) {
+      entryLabel = items[index];
+      index += 1;
+      continue;
+    }
+    const itemIndices: number[] = [];
+    const bullets: string[] = [];
+    while (index < items.length && /^\s*[-*•]\s+/.test(items[index])) {
+      itemIndices.push(index);
+      bullets.push(items[index]);
+      index += 1;
+    }
+    groups.push({
+      groupIndex: groups.length,
+      entryLabel,
+      itemIndices,
+      bullets,
+    });
+  }
+  return groups;
+}
+
+function serializeResume(document: StructuredResumeDocument): string {
+  const sections = document.sections.map((section) => (
+    [section.heading, ...section.items].join("\n")
+  ));
+  return [...document.header, ...sections].join("\n\n");
+}
+
 export default function ResumeAnalysisPanel({ resumeId }: Props) {
   const [jobTitle, setJobTitle] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -106,6 +150,12 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
   const [improvementSaved, setImprovementSaved] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [layoutSaving, setLayoutSaving] = useState(false);
+  const [bulletProposal, setBulletProposal] = useState<BulletOptimizationProposal | null>(null);
+  const [bulletLoadingKey, setBulletLoadingKey] = useState<string | null>(null);
+  const [bulletSettings, setBulletSettings] = useState<Record<string, {
+    targetCount: number;
+    mode: "prioritize" | "consolidate" | "expand";
+  }>>({});
   const [draftView, setDraftView] = useState<"preview" | "edit">("preview");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -446,6 +496,99 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     } : current);
   };
 
+  const updateBulletSetting = (
+    key: string,
+    currentCount: number,
+    update: Partial<{
+      targetCount: number;
+      mode: "prioritize" | "consolidate" | "expand";
+    }>,
+  ) => {
+    setBulletSettings((previous) => {
+      const existing = previous[key] ?? {
+        targetCount: currentCount > 1 ? currentCount - 1 : 2,
+        mode: "prioritize",
+      } as const;
+      return {
+        ...previous,
+        [key]: { ...existing, ...update },
+      };
+    });
+  };
+
+  const handleBulletProposal = async (
+    sectionId: string,
+    group: BulletGroup,
+  ) => {
+    if (!analysis) return;
+    const key = `${sectionId}:${group.groupIndex}`;
+    const setting = bulletSettings[key] ?? {
+      targetCount: group.bullets.length > 1 ? group.bullets.length - 1 : 2,
+      mode: "prioritize" as const,
+    };
+    setBulletLoadingKey(key);
+    setError(null);
+    try {
+      setBulletProposal(await proposeBulletOptimization(analysis.analysis_id, {
+        section_id: sectionId,
+        group_index: group.groupIndex,
+        target_count: setting.targetCount,
+        mode: setting.mode,
+      }));
+    } catch (caught: unknown) {
+      setError(caught instanceof ApiClientError
+        ? ANALYSIS_ERRORS[caught.code] ?? caught.message
+        : "Could not create the bullet proposal.");
+    } finally {
+      setBulletLoadingKey(null);
+    }
+  };
+
+  const applyBulletProposal = () => {
+    if (!bulletProposal?.can_apply) return;
+    setImprovementSaved(false);
+    setImprovement((current) => {
+      const document = current?.result.structured_resume;
+      if (!current || !document) return current;
+      const replacedIndices = new Set(bulletProposal.item_indices);
+      const firstIndex = Math.min(...bulletProposal.item_indices);
+      const sections = document.sections.map((section) => {
+        if (section.section_id !== bulletProposal.section_id) return section;
+        const items: string[] = [];
+        section.items.forEach((item, index) => {
+          if (index === firstIndex) items.push(...bulletProposal.proposed_bullets);
+          if (!replacedIndices.has(index)) items.push(item);
+        });
+        return { ...section, items };
+      });
+      const updatedDocument = { ...document, sections };
+      return {
+        ...current,
+        result: {
+          ...current.result,
+          structured_resume: updatedDocument,
+          optimized_resume_draft: serializeResume(updatedDocument),
+          change_set: [
+            ...current.result.change_set,
+            {
+              change_id: bulletProposal.proposal_id,
+              change_type: "bullet" as const,
+              status: "accepted" as const,
+              target_section: bulletProposal.entry_label.slice(0, 120),
+              original: bulletProposal.original_bullets.join("\n").slice(0, 1500),
+              suggested: bulletProposal.proposed_bullets.join("\n").slice(0, 1500),
+              reason: bulletProposal.rationale.slice(0, 500),
+              evidence: bulletProposal.original_bullets.slice(0, 5),
+              confidence: 0.9,
+              requires_confirmation: false,
+            },
+          ].slice(-30),
+        },
+      };
+    });
+    setBulletProposal(null);
+  };
+
   const updateLayout = <K extends keyof ResumeLayoutSettings>(
     key: K,
     value: ResumeLayoutSettings[K],
@@ -729,6 +872,138 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                     Deterministic phrase coverage from the saved job keywords.
                     No AI call is used.
                   </p>
+                </section>
+              )}
+              {improvement.result.structured_resume && (
+                <section className={styles.bulletControlBlock}>
+                  <div className={styles.reviewHeading}>
+                    <div>
+                      <h4>Bullet count</h4>
+                      <p>Create a proposal for one role or project at a time.</p>
+                    </div>
+                  </div>
+                  <div className={styles.bulletGroups}>
+                    {improvement.result.structured_resume.sections
+                      .filter((section) => {
+                        const heading = section.heading.toLowerCase();
+                        return heading.includes("experience") || heading.includes("project");
+                      })
+                      .flatMap((section) => bulletGroups(section.items).map((group) => {
+                        const key = `${section.section_id}:${group.groupIndex}`;
+                        const setting = bulletSettings[key] ?? {
+                          targetCount: group.bullets.length > 1
+                            ? group.bullets.length - 1
+                            : 2,
+                          mode: "prioritize" as const,
+                        };
+                        const proposal = bulletProposal?.section_id === section.section_id
+                          && bulletProposal.group_index === group.groupIndex
+                          ? bulletProposal
+                          : null;
+                        return (
+                          <article key={key} className={styles.bulletGroup}>
+                            <div className={styles.bulletGroupHeader}>
+                              <div>
+                                <strong>{group.entryLabel}</strong>
+                                <span>{group.bullets.length} current bullets</span>
+                              </div>
+                              <div className={styles.bulletControls}>
+                                <label>
+                                  <span>Target</span>
+                                  <input
+                                    className="form-input"
+                                    type="number"
+                                    min={1}
+                                    max={12}
+                                    value={setting.targetCount}
+                                    onChange={(event) => updateBulletSetting(
+                                      key,
+                                      group.bullets.length,
+                                      {
+                                        targetCount: Math.min(
+                                          12,
+                                          Math.max(1, event.currentTarget.valueAsNumber || 1),
+                                        ),
+                                        mode: event.currentTarget.valueAsNumber
+                                          > group.bullets.length
+                                          ? "expand"
+                                          : setting.mode === "expand"
+                                            ? "prioritize"
+                                            : setting.mode,
+                                      },
+                                    )}
+                                  />
+                                </label>
+                                <label>
+                                  <span>Method</span>
+                                  <select
+                                    className="form-input"
+                                    value={setting.mode}
+                                    onChange={(event) => updateBulletSetting(
+                                      key,
+                                      group.bullets.length,
+                                      {
+                                        mode: event.target.value as
+                                          | "prioritize"
+                                          | "consolidate"
+                                          | "expand",
+                                      },
+                                    )}
+                                  >
+                                    <option value="prioritize">Prioritize</option>
+                                    <option value="consolidate">Consolidate</option>
+                                    <option value="expand">Expand</option>
+                                  </select>
+                                </label>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  onClick={() => handleBulletProposal(section.section_id, group)}
+                                  disabled={bulletLoadingKey !== null
+                                    || setting.targetCount === group.bullets.length}
+                                >
+                                  {bulletLoadingKey === key ? "Generating…" : "Propose"}
+                                </button>
+                              </div>
+                            </div>
+                            {proposal && (
+                              <div className={styles.bulletProposal}>
+                                <p>{proposal.rationale}</p>
+                                <ul>
+                                  {proposal.proposed_bullets.map((bullet, index) => (
+                                    <li key={`${proposal.proposal_id}:${index}`}>
+                                      {bullet.replace(/^\s*[-*•]\s+/, "")}
+                                    </li>
+                                  ))}
+                                </ul>
+                                {proposal.lost_keywords.length > 0 && (
+                                  <div className={styles.keywordWarning} role="alert">
+                                    Missing protected keywords: {proposal.lost_keywords.join(", ")}
+                                  </div>
+                                )}
+                                <div className={styles.proposalActions}>
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost btn-sm"
+                                    onClick={() => setBulletProposal(null)}
+                                  >
+                                    Dismiss
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary btn-sm"
+                                    onClick={applyBulletProposal}
+                                    disabled={!proposal.can_apply}
+                                  >
+                                    Apply proposal
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </article>
+                        );
+                      }))}
+                  </div>
                 </section>
               )}
               {improvement.result.tailoring_decisions.length > 0 && (

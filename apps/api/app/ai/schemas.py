@@ -19,6 +19,16 @@ class BulletRewrite(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
 
 
+class OptimizedBullet(BaseModel):
+    text: str = Field(min_length=1, max_length=1200)
+    source_indices: list[int] = Field(min_length=1, max_length=12)
+
+
+class BulletOptimizationResult(BaseModel):
+    bullets: list[OptimizedBullet] = Field(min_length=1, max_length=12)
+    rationale: str = Field(min_length=1, max_length=800)
+
+
 class StructuredResumeSection(BaseModel):
     section_id: str = Field(min_length=1, max_length=80)
     heading: str = Field(min_length=1, max_length=120)
