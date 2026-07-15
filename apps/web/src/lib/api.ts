@@ -27,6 +27,19 @@ export interface ResumeSummary {
   created_at: string | null;
 }
 
+export interface ATSCheck {
+  check_id: string;
+  label: string;
+  status: "pass" | "warning" | "fail";
+  detail: string;
+}
+
+export interface ATSScan {
+  score: number;
+  checks: ATSCheck[];
+  recommendations: string[];
+}
+
 export interface ResumeAnalysisResult {
   match_score: number;
   summary: string;
@@ -260,6 +273,17 @@ export async function listResumes(): Promise<ResumeSummary[]> {
 export async function getResume(resumeId: string): Promise<ResumeUploadResponse> {
   const response = await authenticatedRequest(
     `/api/v1/resumes/${encodeURIComponent(resumeId)}`,
+  );
+  return response.json();
+}
+
+export async function scanResumeATS(
+  resumeId: string,
+  signal?: AbortSignal,
+): Promise<ATSScan> {
+  const response = await authenticatedRequest(
+    `/api/v1/resumes/${encodeURIComponent(resumeId)}/ats-scan`,
+    { signal },
   );
   return response.json();
 }

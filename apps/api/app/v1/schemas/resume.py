@@ -48,3 +48,15 @@ class ResumeProfileUpdateRequest(BaseModel):
                 cleaned.append(normalized)
         return cleaned
 
+
+class ATSCheckResponse(BaseModel):
+    check_id: str
+    label: str
+    status: Literal["pass", "warning", "fail"]
+    detail: str
+
+
+class ATSScanResponse(BaseModel):
+    score: int = Field(ge=0, le=100)
+    checks: list[ATSCheckResponse]
+    recommendations: list[str]

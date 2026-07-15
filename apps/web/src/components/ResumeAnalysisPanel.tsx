@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import {
   ApiClientError,
+  ATSScan,
   AnalysisDetail,
   AnalysisSummary,
   calculateKeywordCoverage,
@@ -16,6 +17,7 @@ import {
   KeywordCoverage,
   listAnalyses,
   ResumeLayoutSettings,
+  scanResumeATS,
   saveImprovementLayout,
   saveImprovements,
 } from "@/lib/api";
@@ -91,6 +93,9 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
   const [jobTitle, setJobTitle] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [jobDescription, setJobDescription] = useState("");
+  const [atsScan, setAtsScan] = useState<ATSScan | null>(null);
+  const [atsLoading, setAtsLoading] = useState(true);
+  const [atsError, setAtsError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisDetail | null>(null);
   const [history, setHistory] = useState<AnalysisSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -112,6 +117,23 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
   const [coverageLoading, setCoverageLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    scanResumeATS(resumeId, controller.signal)
+      .then(setAtsScan)
+      .catch((caught: unknown) => {
+        if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+          setAtsError(caught instanceof ApiClientError
+            ? caught.message
+            : "Could not run the generic ATS scan.");
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setAtsLoading(false);
+      });
+    return () => controller.abort();
+  }, [resumeId]);
 
   useEffect(() => {
     let active = true;
@@ -554,11 +576,50 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     </section>
   );
 
+  const atsSection = (
+    <section className={styles.atsPanel} aria-labelledby="generic-ats-title">
+      <div className={styles.atsHeader}>
+        <div>
+          <p className={styles.eyebrow}>Generic scan</p>
+          <h3 id="generic-ats-title">ATS readiness</h3>
+        </div>
+        {atsScan && (
+          <div className={styles.atsScore} aria-label={`${atsScan.score} percent ATS ready`}>
+            <strong>{atsScan.score}</strong>
+            <span>/100</span>
+          </div>
+        )}
+      </div>
+      {atsLoading ? (
+        <div className={styles.historyState}>
+          <span className="spinner spinner-sm" /> Scanning resume…
+        </div>
+      ) : atsError ? (
+        <p className={styles.atsError}>{atsError}</p>
+      ) : atsScan ? (
+        <div className={styles.atsBody}>
+          <ul className={styles.atsChecks}>
+            {atsScan.checks.map((check) => (
+              <li key={check.check_id} className={styles[`ats_${check.status}`]}>
+                <div>
+                  <strong>{check.label}</strong>
+                  <span>{check.status}</span>
+                </div>
+                <p>{check.detail}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+
   if (analysis) {
     const result = analysis.result;
     return (
       <div className={styles.analysisWorkspace}>
         <aside className={styles.workspaceColumn} aria-label="Analysis history">
+          {atsSection}
           {historySection}
         <div className={`${styles.panel} animate-slide-up`}>
         <header className={styles.resultHeader}>
@@ -970,6 +1031,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
 
   return (
     <>
+      {atsSection}
       {historySection}
       <div className={styles.panel}>
       <div className={styles.formHeader}>

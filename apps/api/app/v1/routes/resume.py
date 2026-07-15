@@ -5,9 +5,12 @@ from starlette.concurrency import run_in_threadpool
 
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.core.config import settings
+from app.services.ats_scan_service import ATSScanService
 from app.services.resume_service import ResumeService
 from app.services.resume_upload_service import ResumeUploadService
 from app.v1.schemas.resume import (
+    ATSCheckResponse,
+    ATSScanResponse,
     ResumeProfileUpdateRequest,
     ResumeSummaryResponse,
     ResumeUploadResponse,
@@ -24,6 +27,27 @@ def clean_upload_tags(value: str) -> list[str]:
     )[:10]
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
+
+
+@router.get("/{resume_id}/ats-scan", response_model=ATSScanResponse)
+async def scan_resume_for_ats(
+    resume_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> ATSScanResponse:
+    scan = await run_in_threadpool(ATSScanService.scan, current_user.uid, resume_id)
+    return ATSScanResponse(
+        score=scan.score,
+        checks=[
+            ATSCheckResponse(
+                check_id=check.check_id,
+                label=check.label,
+                status=check.status,
+                detail=check.detail,
+            )
+            for check in scan.checks
+        ],
+        recommendations=scan.recommendations,
+    )
 
 
 @router.get("", response_model=list[ResumeSummaryResponse])

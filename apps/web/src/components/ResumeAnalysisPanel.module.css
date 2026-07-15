@@ -19,6 +19,7 @@
 }
 
 .workspaceColumn > .historyPanel,
+.workspaceColumn > .atsPanel,
 .workspaceColumn > .panel,
 .workspaceColumn > .improvementPanel,
 .workspaceColumn > .draftPanel {
@@ -202,6 +203,117 @@
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   overflow: hidden;
+}
+
+.atsPanel {
+  margin-top: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.atsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+}
+
+.atsHeader h3 {
+  margin-top: 3px;
+  font-size: 0.95rem;
+}
+
+.atsScore {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  color: var(--color-text-muted);
+}
+
+.atsScore strong {
+  color: var(--color-text);
+  font-size: 1.35rem;
+}
+
+.atsScore span {
+  font-size: 0.68rem;
+}
+
+.atsBody {
+  padding: 14px;
+}
+
+.atsChecks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  list-style: none;
+}
+
+.workspaceColumn .atsChecks {
+  grid-template-columns: 1fr;
+}
+
+.atsChecks li {
+  padding: 10px 11px;
+  border: 1px solid var(--color-border);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-2);
+}
+
+.atsChecks li > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.atsChecks strong {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.atsChecks span {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.atsChecks p {
+  margin-top: 5px;
+  color: var(--color-text-faint);
+  font-size: 0.69rem;
+  line-height: 1.45;
+}
+
+.ats_pass {
+  border-left-color: #34d399 !important;
+}
+
+.ats_warning {
+  border-left-color: #fbbf24 !important;
+}
+
+.ats_fail {
+  border-left-color: #fb7185 !important;
+}
+
+.atsError {
+  padding: 18px 22px;
+  color: #fb7185;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 720px) {
+  .atsChecks {
+    grid-template-columns: 1fr;
+  }
 }
 
 .historyHeader {

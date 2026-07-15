@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.main import app
 from app.models.resume import ResumeRecord
+from app.services.ats_scan_service import ATSCheck, ATSScan, ATSScanService
 from app.services.resume_service import ResumeService
 from app.services.resume_upload_service import ParsedResume
 
@@ -102,6 +103,29 @@ def test_update_resume_profile_returns_tags(monkeypatch: pytest.MonkeyPatch) -> 
     assert response.status_code == 200
     assert response.json()["title"] == "Backend Master"
     assert response.json()["tags"] == ["backend", "python"]
+
+
+def test_generic_ats_scan_returns_checks(monkeypatch: pytest.MonkeyPatch) -> None:
+    scan = ATSScan(
+        score=88,
+        checks=[
+            ATSCheck(
+                check_id="email",
+                label="Email address",
+                status="pass",
+                detail="An email address is machine-readable.",
+                weight=10,
+            )
+        ],
+        recommendations=["Use a conventional Skills section heading."],
+    )
+    monkeypatch.setattr(ATSScanService, "scan", lambda *_args: scan)
+
+    response = client.get("/api/v1/resumes/resume-id/ats-scan")
+
+    assert response.status_code == 200
+    assert response.json()["score"] == 88
+    assert response.json()["checks"][0]["status"] == "pass"
 
 
 def test_delete_cors_preflight_allows_the_local_frontend() -> None:
