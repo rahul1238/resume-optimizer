@@ -145,7 +145,30 @@ export interface ImprovementResponse {
   provider: string;
   model: string;
   created_at: string | null;
+  updated_at: string | null;
+  company_name: string | null;
+  role_name: string | null;
+  application_date: string | null;
+  revision: number;
+  layout: ResumeLayoutSettings;
   result: ResumeImprovementResult;
+}
+
+export interface ResumeLayoutSettings {
+  page_format: "a4" | "letter";
+  heading_font: "sans" | "serif";
+  body_font: "sans" | "serif";
+  heading_size: number;
+  body_size: number;
+  name_size: number;
+  line_spacing: number;
+  margin_top: number;
+  margin_right: number;
+  margin_bottom: number;
+  margin_left: number;
+  section_spacing: number;
+  heading_content_spacing: number;
+  block_spacing: number;
 }
 
 interface ApiErrorBody {
@@ -329,44 +352,54 @@ export async function saveImprovements(
   return response.json();
 }
 
+export async function saveImprovementLayout(
+  analysisId: string,
+  layout: ResumeLayoutSettings,
+): Promise<ImprovementResponse> {
+  const response = await authenticatedRequest(
+    `/api/v1/analyses/${encodeURIComponent(analysisId)}/improvements/layout`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ layout }),
+    },
+  );
+  return response.json();
+}
+
 export async function getResumePdfPreview(
   analysisId: string,
   draft: string,
-  targetPages: 1 | 2,
+  layout: ResumeLayoutSettings,
   signal?: AbortSignal,
-): Promise<{ blob: Blob; pageCount: number; fitsTarget: boolean }> {
+): Promise<{ blob: Blob; pageCount: number }> {
   const response = await authenticatedRequest(
     `/api/v1/analyses/${encodeURIComponent(analysisId)}/preview/pdf`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draft, target_pages: targetPages }),
+      body: JSON.stringify({ draft, layout }),
       signal,
     },
   );
   return {
     blob: await response.blob(),
-    pageCount: Number(response.headers.get("X-Resume-Page-Count") ?? targetPages),
-    fitsTarget: response.headers.get("X-Resume-Target-Fit") !== "false",
+    pageCount: Number(response.headers.get("X-Resume-Page-Count") ?? 1),
   };
 }
 
 export async function downloadResumeExport(
   analysisId: string,
-  format: "pdf" | "docx",
-  options: { mode?: "ats" | "preserve"; targetPages?: 1 | 2 } = {},
 ): Promise<void> {
-  const query = new URLSearchParams({
-    target_pages: String(options.targetPages ?? 1),
-  });
-  if (format === "docx") query.set("mode", options.mode ?? "ats");
   const response = await authenticatedRequest(
-    `/api/v1/analyses/${encodeURIComponent(analysisId)}/export/${format}?${query}`,
+    `/api/v1/analyses/${encodeURIComponent(analysisId)}/export/pdf`,
   );
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");
   link.href = url;
-  link.download = `optimized-resume.${format}`;
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+  link.download = filename ?? "Tailored_Resume.pdf";
   document.body.appendChild(link);
   link.click();
   link.remove();

@@ -15,13 +15,14 @@ import {
   ImprovementResponse,
   KeywordCoverage,
   listAnalyses,
+  ResumeLayoutSettings,
+  saveImprovementLayout,
   saveImprovements,
 } from "@/lib/api";
 import styles from "./ResumeAnalysisPanel.module.css";
 
 interface Props {
   resumeId: string;
-  sourceFileType: "pdf" | "docx";
 }
 
 const ANALYSIS_ERRORS: Record<string, string> = {
@@ -50,7 +51,43 @@ function ResultList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props) {
+function LayoutNumber({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label>
+      <span>{label}</span>
+      <input
+        className="form-input"
+        type="number"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        onChange={(event) => {
+          const next = event.currentTarget.valueAsNumber;
+          if (Number.isFinite(next)) {
+            onChange(Math.min(max, Math.max(min, next)));
+          }
+        }}
+      />
+    </label>
+  );
+}
+
+export default function ResumeAnalysisPanel({ resumeId }: Props) {
   const [jobTitle, setJobTitle] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [jobDescription, setJobDescription] = useState("");
@@ -62,15 +99,13 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
   const [improvementLoading, setImprovementLoading] = useState(false);
   const [improvementSaving, setImprovementSaving] = useState(false);
   const [improvementSaved, setImprovementSaved] = useState(false);
-  const [exporting, setExporting] = useState<"pdf" | "docx" | null>(null);
-  const [exportMode, setExportMode] = useState<"ats" | "preserve">("ats");
-  const [targetPages, setTargetPages] = useState<1 | 2>(1);
+  const [exporting, setExporting] = useState(false);
+  const [layoutSaving, setLayoutSaving] = useState(false);
   const [draftView, setDraftView] = useState<"preview" | "edit">("preview");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewPageCount, setPreviewPageCount] = useState<number | null>(null);
-  const [previewFitsTarget, setPreviewFitsTarget] = useState(true);
   const [previewRevision, setPreviewRevision] = useState(0);
   const [improvementFeedback, setImprovementFeedback] = useState<Record<string, string>>({});
   const [coverage, setCoverage] = useState<KeywordCoverage | null>(null);
@@ -127,7 +162,8 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
 
   useEffect(() => {
     const draft = improvement?.result.optimized_resume_draft.trim();
-    if (!analysis || !draft) {
+    const layout = improvement?.layout;
+    if (!analysis || !draft || !layout) {
       return;
     }
 
@@ -140,13 +176,12 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
         const preview = await getResumePdfPreview(
           analysis.analysis_id,
           draft,
-          targetPages,
+          layout,
           controller.signal,
         );
         objectUrl = URL.createObjectURL(preview.blob);
         setPreviewUrl(objectUrl);
         setPreviewPageCount(preview.pageCount);
-        setPreviewFitsTarget(preview.fitsTarget);
       } catch (caught: unknown) {
         if (!(caught instanceof DOMException && caught.name === "AbortError")) {
           setPreviewError(caught instanceof ApiClientError
@@ -166,8 +201,8 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
   }, [
     analysis,
     improvement?.result.optimized_resume_draft,
+    improvement?.layout,
     previewRevision,
-    targetPages,
   ]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -389,15 +424,47 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
     } : current);
   };
 
+  const updateLayout = <K extends keyof ResumeLayoutSettings>(
+    key: K,
+    value: ResumeLayoutSettings[K],
+  ) => {
+    setImprovement((current) => current ? {
+      ...current,
+      layout: { ...current.layout, [key]: value },
+    } : current);
+  };
+
+  const handleSaveLayout = async () => {
+    if (!analysis || !improvement) return;
+    setLayoutSaving(true);
+    setError(null);
+    try {
+      const currentResult = improvement.result;
+      const saved = await saveImprovementLayout(
+        analysis.analysis_id,
+        improvement.layout,
+      );
+      setImprovement({ ...saved, result: currentResult });
+    } catch (caught: unknown) {
+      setError(caught instanceof ApiClientError
+        ? caught.message
+        : "Could not save the resume layout.");
+    } finally {
+      setLayoutSaving(false);
+    }
+  };
+
   const handleSaveImprovements = async () => {
     if (!analysis || !improvement) return;
     setError(null);
     setImprovementSaving(true);
     try {
-      setImprovement(await saveImprovements(
+      const currentLayout = improvement.layout;
+      const saved = await saveImprovements(
         analysis.analysis_id,
         improvement.result,
-      ));
+      );
+      setImprovement({ ...saved, layout: currentLayout });
       setImprovementSaved(true);
     } catch (caught: unknown) {
       setError(caught instanceof ApiClientError
@@ -408,29 +475,28 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
     }
   };
 
-  const handleExport = async (format: "pdf" | "docx") => {
+  const handleExport = async () => {
     if (!analysis || !improvement) return;
     setError(null);
-    setExporting(format);
+    setExporting(true);
     try {
-      if (!improvementSaved) {
-        const saved = await saveImprovements(
-          analysis.analysis_id,
-          improvement.result,
-        );
-        setImprovement(saved);
-        setImprovementSaved(true);
-      }
-      await downloadResumeExport(analysis.analysis_id, format, {
-        mode: exportMode,
-        targetPages,
-      });
+      const saved = await saveImprovements(
+        analysis.analysis_id,
+        improvement.result,
+      );
+      const withLayout = await saveImprovementLayout(
+        analysis.analysis_id,
+        improvement.layout,
+      );
+      setImprovement({ ...withLayout, result: saved.result });
+      setImprovementSaved(true);
+      await downloadResumeExport(analysis.analysis_id);
     } catch (caught: unknown) {
       setError(caught instanceof ApiClientError
         ? caught.message
-        : `Could not download the ${format.toUpperCase()} resume.`);
+        : "Could not download the PDF resume.");
     } finally {
-      setExporting(null);
+      setExporting(false);
     }
   };
 
@@ -801,38 +867,11 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
                     <h3>Editable draft</h3>
                     <p>Manual edits do not call Gemini.</p>
                   </div>
-                  <div className={styles.draftActions}>
-                    <label className={styles.exportOption}>
-                      <span>Layout</span>
-                      <select
-                        className="form-input"
-                        value={exportMode}
-                        onChange={(event) => setExportMode(
-                          event.target.value as "ats" | "preserve",
-                        )}
-                        disabled={exporting !== null}
-                      >
-                        <option value="ats">ATS optimized</option>
-                        <option value="preserve" disabled={sourceFileType !== "docx"}>
-                          Preserve original DOCX
-                        </option>
-                      </select>
-                    </label>
-                    <label className={styles.exportOption}>
-                      <span>Target</span>
-                      <select
-                        className="form-input"
-                        value={targetPages}
-                        onChange={(event) => setTargetPages(
-                          Number(event.target.value) as 1 | 2,
-                        )}
-                        disabled={exporting !== null || exportMode === "preserve"}
-                      >
-                        <option value={1}>1 page</option>
-                        <option value={2}>2 pages</option>
-                      </select>
-                    </label>
-                  </div>
+                  {previewPageCount && (
+                    <span className={styles.pageCount}>
+                      {previewPageCount} {previewPageCount === 1 ? "page" : "pages"}
+                    </span>
+                  )}
                 </div>
                 <div className={styles.draftCommands}>
                   <div className={styles.viewToggle} aria-label="Resume view">
@@ -856,52 +895,32 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
                   <button type="button" className="btn btn-ghost btn-sm" onClick={handleSaveImprovements} disabled={improvementSaving || !improvement.result.optimized_resume_draft.trim()}>
                     {improvementSaving ? "Saving…" : improvementSaved ? "Saved" : "Save draft"}
                   </button>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => handleExport("docx")} disabled={exporting !== null || !improvement.result.optimized_resume_draft.trim()}>
-                    {exporting === "docx" ? "Preparing…" : "Download DOCX"}
-                  </button>
-                  <button type="button" className="btn btn-primary btn-sm" onClick={() => handleExport("pdf")} disabled={exporting !== null || !improvement.result.optimized_resume_draft.trim()} title="PDF always uses the ATS-optimized layout">
-                    {exporting === "pdf" ? "Preparing…" : "Download PDF"}
+                  <button type="button" className="btn btn-primary btn-sm" onClick={handleExport} disabled={exporting || !improvement.result.optimized_resume_draft.trim()}>
+                    {exporting ? "Preparing…" : "Download PDF"}
                   </button>
                 </div>
-                {!previewLoading && !previewError && !previewFitsTarget && previewPageCount && (
-                  <div className={styles.previewNotice} role="status">
-                    <span>
-                      Preview is {previewPageCount} pages. The selected {targetPages}-page
-                      limit is still enforced for download.
-                    </span>
-                    <div className={styles.previewNoticeActions}>
-                      {targetPages === 1 && (
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm"
-                          disabled={improvementLoading}
-                          onClick={() => handleGenerateImprovements(true, [
-                            "Fit the optimized resume into one readable ATS page. Preserve contact links, every employer, job title, employment date, and education entry. Keep required and recommended skills and the strongest evidence-backed quantified outcomes. Condense the summary and least relevant supporting bullets first, remove repetition and irrelevant extras, and do not invent claims or shrink content through formatting instructions.",
-                          ])}
-                        >
-                          {improvementLoading ? "Fitting…" : "Fit to 1 page"}
-                        </button>
-                      )}
-                      {targetPages === 1 && previewPageCount <= 2 ? (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => setTargetPages(2)}
-                        >
-                          Use 2 pages
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => setDraftView("edit")}
-                        >
-                          Edit to shorten
-                        </button>
-                      )}
-                    </div>
+                <details className={styles.layoutPanel}>
+                  <summary>Layout and typography</summary>
+                  <div className={styles.layoutGrid}>
+                    <label><span>Page</span><select className="form-input" value={improvement.layout.page_format} onChange={(event) => updateLayout("page_format", event.target.value as "a4" | "letter")}><option value="a4">A4</option><option value="letter">Letter</option></select></label>
+                    <label><span>Body font</span><select className="form-input" value={improvement.layout.body_font} onChange={(event) => updateLayout("body_font", event.target.value as "sans" | "serif")}><option value="sans">Sans serif</option><option value="serif">Serif</option></select></label>
+                    <label><span>Heading font</span><select className="form-input" value={improvement.layout.heading_font} onChange={(event) => updateLayout("heading_font", event.target.value as "sans" | "serif")}><option value="sans">Sans serif</option><option value="serif">Serif</option></select></label>
+                    <LayoutNumber label="Body size" value={improvement.layout.body_size} min={9.5} max={12} step={0.5} onChange={(value) => updateLayout("body_size", value)} />
+                    <LayoutNumber label="Heading size" value={improvement.layout.heading_size} min={10} max={15} step={0.5} onChange={(value) => updateLayout("heading_size", value)} />
+                    <LayoutNumber label="Name size" value={improvement.layout.name_size} min={14} max={22} step={1} onChange={(value) => updateLayout("name_size", value)} />
+                    <LayoutNumber label="Line spacing" value={improvement.layout.line_spacing} min={1.05} max={1.5} step={0.05} onChange={(value) => updateLayout("line_spacing", value)} />
+                    <LayoutNumber label="Top margin" value={improvement.layout.margin_top} min={0.35} max={1.2} step={0.05} onChange={(value) => updateLayout("margin_top", value)} />
+                    <LayoutNumber label="Right margin" value={improvement.layout.margin_right} min={0.35} max={1.2} step={0.05} onChange={(value) => updateLayout("margin_right", value)} />
+                    <LayoutNumber label="Bottom margin" value={improvement.layout.margin_bottom} min={0.35} max={1.2} step={0.05} onChange={(value) => updateLayout("margin_bottom", value)} />
+                    <LayoutNumber label="Left margin" value={improvement.layout.margin_left} min={0.35} max={1.2} step={0.05} onChange={(value) => updateLayout("margin_left", value)} />
+                    <LayoutNumber label="Section gap" value={improvement.layout.section_spacing} min={2} max={16} step={1} onChange={(value) => updateLayout("section_spacing", value)} />
+                    <LayoutNumber label="Heading gap" value={improvement.layout.heading_content_spacing} min={1} max={10} step={0.5} onChange={(value) => updateLayout("heading_content_spacing", value)} />
+                    <LayoutNumber label="Block gap" value={improvement.layout.block_spacing} min={0} max={10} step={0.5} onChange={(value) => updateLayout("block_spacing", value)} />
                   </div>
-                )}
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={handleSaveLayout} disabled={layoutSaving}>
+                    {layoutSaving ? "Saving…" : "Save layout"}
+                  </button>
+                </details>
                 {draftView === "preview" ? (
                   <div className={styles.previewFrame} aria-live="polite">
                     {previewUrl && (

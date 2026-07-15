@@ -533,6 +533,63 @@
   font-size: 0.75rem;
 }
 
+.pageCount {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.layoutPanel {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-2);
+}
+
+.layoutPanel summary {
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.layoutGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin: 12px 0;
+}
+
+.layoutGrid label {
+  display: grid;
+  gap: 4px;
+}
+
+.layoutGrid label > span {
+  color: var(--color-text-faint);
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+.layoutGrid input,
+.layoutGrid select {
+  min-width: 0;
+  height: 34px;
+  padding: 5px 8px;
+  font-size: 0.72rem;
+}
+
+@media (max-width: 720px) {
+  .layoutGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .draftActions {
   display: flex;
   flex-wrap: wrap;
