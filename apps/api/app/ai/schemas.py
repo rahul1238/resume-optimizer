@@ -52,6 +52,16 @@ class ClarificationQuestion(BaseModel):
     answer: str = Field(default="", max_length=1000)
 
 
+class TailoringDecision(BaseModel):
+    decision_id: str = Field(default="", max_length=80)
+    content_type: Literal["skill", "experience_bullet", "project", "employment"]
+    source_text: str = Field(min_length=1, max_length=1500)
+    action: Literal["include", "condense", "omit"]
+    relevance: Literal["required", "recommended", "supporting", "irrelevant"]
+    reason: str = Field(min_length=1, max_length=500)
+    matched_requirements: list[str] = Field(default_factory=list, max_length=5)
+
+
 class ResumeImprovementResult(BaseModel):
     optimized_resume_draft: str = Field(default="", max_length=50_000)
     suggested_summary: str = Field(min_length=1, max_length=1500)
@@ -66,3 +76,70 @@ class ResumeImprovementResult(BaseModel):
         default_factory=list,
         max_length=10,
     )
+    tailoring_decisions: list[TailoringDecision] = Field(
+        default_factory=list,
+        max_length=50,
+    )
+
+
+# Keep Gemini's response schema compact. Stable IDs, review statuses, and the
+# structured document are deterministic server concerns and are added later.
+class GeminiResumeChange(BaseModel):
+    change_type: Literal["summary", "bullet", "skill", "section"]
+    target_section: str
+    original: str
+    suggested: str
+    reason: str
+    evidence: list[str]
+    confidence: float
+    requires_confirmation: bool
+
+
+class GeminiClarificationQuestion(BaseModel):
+    requirement: str
+    question: str
+
+
+class GeminiTailoringDecision(BaseModel):
+    content_type: Literal["skill", "experience_bullet", "project", "employment"]
+    source_text: str
+    action: Literal["include", "condense", "omit"]
+    relevance: Literal["required", "recommended", "supporting", "irrelevant"]
+    reason: str
+    matched_requirements: list[str]
+
+
+class GeminiResumeImprovementResult(BaseModel):
+    optimized_resume_draft: str
+    suggested_summary: str
+    summary_reason: str
+    bullet_rewrites: list[BulletRewrite]
+    skills_to_emphasize: list[str]
+    ats_recommendations: list[str]
+    integrity_notes: list[str]
+    change_set: list[GeminiResumeChange]
+    clarification_questions: list[GeminiClarificationQuestion]
+    tailoring_decisions: list[GeminiTailoringDecision]
+
+    def to_domain(self) -> ResumeImprovementResult:
+        return ResumeImprovementResult(
+            optimized_resume_draft=self.optimized_resume_draft,
+            suggested_summary=self.suggested_summary,
+            summary_reason=self.summary_reason,
+            bullet_rewrites=self.bullet_rewrites[:8],
+            skills_to_emphasize=self.skills_to_emphasize[:20],
+            ats_recommendations=self.ats_recommendations[:10],
+            integrity_notes=self.integrity_notes[:10],
+            change_set=[
+                ResumeChange.model_validate(change.model_dump())
+                for change in self.change_set[:30]
+            ],
+            clarification_questions=[
+                ClarificationQuestion.model_validate(question.model_dump())
+                for question in self.clarification_questions[:10]
+            ],
+            tailoring_decisions=[
+                TailoringDecision.model_validate(decision.model_dump())
+                for decision in self.tailoring_decisions[:50]
+            ],
+        )

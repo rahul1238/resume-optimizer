@@ -27,11 +27,11 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"),
     )
-    gemini_model: str = "gemini-3.5-flash"
+    gemini_model: str = "gemini-3.1-flash-lite"
     gemini_fallback_models: list[str] = [
-        "gemini-3.1-flash-lite",
         "gemini-2.5-flash-lite",
         "gemini-2.5-flash",
+        "gemini-3-flash-preview",
     ]
     gemini_timeout_seconds: int = 60
     tectonic_binary: str = "tectonic"

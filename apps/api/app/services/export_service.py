@@ -324,6 +324,13 @@ class ResumeExportService:
         return content
 
     @classmethod
+    def to_pdf_preview(cls, draft: str, target_pages: int = 1) -> tuple[bytes, int]:
+        resume = cls.structure(draft)
+        content, _, page_count = cls._best_fit_pdf(resume, target_pages)
+        cls._validate_pdf(content, resume.all_text)
+        return content, page_count
+
+    @classmethod
     def preserve_docx(cls, context: ExportContext) -> bytes:
         if context.file_type != "docx":
             return cls.to_docx(context.result.optimized_resume_draft)
@@ -353,13 +360,24 @@ class ResumeExportService:
     def _fit_pdf(
         cls, resume: StructuredResume, target_pages: int
     ) -> tuple[bytes, LayoutProfile]:
+        content, profile, page_count = cls._best_fit_pdf(resume, target_pages)
+        if page_count > target_pages:
+            raise ResumePageLimitError()
+        return content, profile
+
+    @classmethod
+    def _best_fit_pdf(
+        cls, resume: StructuredResume, target_pages: int
+    ) -> tuple[bytes, LayoutProfile, int]:
         last_content = b""
+        last_page_count = 0
         for profile in cls.profiles:
             last_content = cls._render_pdf(resume, profile)
             with fitz.open(stream=last_content, filetype="pdf") as document:
-                if len(document) <= target_pages:
-                    return last_content, profile
-        raise ResumePageLimitError()
+                last_page_count = len(document)
+                if last_page_count <= target_pages:
+                    return last_content, profile, last_page_count
+        return last_content, cls.profiles[-1], last_page_count
 
     @classmethod
     def _render_pdf(cls, resume: StructuredResume, profile: LayoutProfile) -> bytes:

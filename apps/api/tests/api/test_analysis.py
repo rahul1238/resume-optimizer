@@ -9,6 +9,7 @@ from app.main import app
 from app.models.analysis import AnalysisRecord
 from app.repositories.analysis_repository import AnalysisNotFoundError
 from app.services.analysis_service import AnalysisService
+from app.services.export_service import ResumeExportService
 
 client = TestClient(app)
 
@@ -172,3 +173,29 @@ def test_keyword_coverage_is_calculated_without_ai(
         "covered_keywords": ["Python", "C++"],
         "missing_keywords": ["Kubernetes"],
     }
+
+
+def test_pdf_preview_renders_unsaved_draft(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(AnalysisService, "get", lambda *_args: stored_analysis())
+    rendered: list[tuple[str, int]] = []
+
+    def to_pdf_preview(draft: str, target_pages: int) -> tuple[bytes, int]:
+        rendered.append((draft, target_pages))
+        return b"%PDF-1.7 preview", 2
+
+    monkeypatch.setattr(ResumeExportService, "to_pdf_preview", to_pdf_preview)
+    response = client.post(
+        "/api/v1/analyses/analysis-id/preview/pdf",
+        json={"draft": "Tailored resume draft", "target_pages": 1},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["content-disposition"].startswith("inline;")
+    assert response.headers["x-resume-page-count"] == "2"
+    assert response.headers["x-resume-target-fit"] == "false"
+    assert response.content == b"%PDF-1.7 preview"
+    assert rendered == [("Tailored resume draft", 1)]

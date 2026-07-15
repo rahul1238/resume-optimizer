@@ -57,3 +57,8 @@ class KeywordCoverageResponse(BaseModel):
     coverage_score: int = Field(ge=0, le=100)
     covered_keywords: list[str]
     missing_keywords: list[str]
+
+
+class ResumePreviewRequest(BaseModel):
+    draft: str = Field(min_length=1, max_length=50_000)
+    target_pages: int = Field(default=1, ge=1, le=2)

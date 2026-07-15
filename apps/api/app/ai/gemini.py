@@ -6,8 +6,13 @@ from google.genai import errors, types
 from app.ai.provider import (
     AIProviderConfigurationError,
     AIProviderError,
+    AIProviderQuotaError,
 )
-from app.ai.schemas import ResumeAnalysisResult, ResumeImprovementResult
+from app.ai.schemas import (
+    GeminiResumeImprovementResult,
+    ResumeAnalysisResult,
+    ResumeImprovementResult,
+)
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -15,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class GeminiProvider:
     name = "gemini"
-    fallback_status_codes = {500, 503, 504}
+    fallback_status_codes = {429, 500, 503, 504}
 
     def __init__(self) -> None:
         if not settings.gemini_api_key:
@@ -106,6 +111,8 @@ RESUME
                 return ResumeAnalysisResult.model_validate_json(response.text)
         except (errors.APIError, ValueError) as error:
             logger.exception("Gemini resume analysis failed")
+            if isinstance(error, errors.APIError) and error.code == 429:
+                raise AIProviderQuotaError() from error
             raise AIProviderError() from error
 
         raise AIProviderError("The analysis service returned an empty response.")
@@ -147,6 +154,24 @@ candidate's meaning. Rewrite up to eight weak experience bullets when identifiab
 Skills to emphasize must already appear in the resume. Put any requested job skill
 that is unsupported by the resume in integrity_notes instead of adding it.
 
+Treat RESUME as an immutable master career profile containing everything the
+candidate can truthfully claim. Produce a targeted derivative, not another master
+resume. First distinguish required job qualifications from recommended ones.
+Select skills, projects, and experience bullets only when they support a required
+qualification, a recommended qualification, or essential context for the target
+role. For example, a backend application should omit unrelated frontend tools
+unless the job asks for them or they materially support a selected achievement.
+Do not keyword-stuff or retain unrelated content merely because space is available.
+
+Preserve every employer, role, and date range so tailoring cannot create employment
+gaps. An irrelevant role may be condensed, but never removed. Prefer the strongest
+three to six relevant bullets for a recent role and fewer for older or less relevant
+roles. Keep the master resume unchanged; omissions apply only to this tailored draft.
+Populate tailoring_decisions for selected and omitted skills, projects, experience
+bullets, and employment entries. Identify whether each item serves a required,
+recommended, supporting, or irrelevant requirement, and cite the matched job
+requirements. Employment decisions must use include or condense, never omit.
+
 For each proposed edit, add one atomic change_set item. Include the exact original
 text, the suggested replacement, its target section, a concise reason, and up to
 five exact facts from the resume as evidence. Set requires_confirmation to true
@@ -181,13 +206,17 @@ RESUME
 {revision_context}
 """
         try:
-            response = self._generate(prompt, ResumeImprovementResult)
-            if isinstance(response.parsed, ResumeImprovementResult):
-                return response.parsed
+            response = self._generate(prompt, GeminiResumeImprovementResult)
+            if isinstance(response.parsed, GeminiResumeImprovementResult):
+                return response.parsed.to_domain()
             if response.text:
-                return ResumeImprovementResult.model_validate_json(response.text)
+                return GeminiResumeImprovementResult.model_validate_json(
+                    response.text
+                ).to_domain()
         except (errors.APIError, ValueError) as error:
             logger.exception("Gemini resume improvement failed")
+            if isinstance(error, errors.APIError) and error.code == 429:
+                raise AIProviderQuotaError() from error
             raise AIProviderError() from error
 
         raise AIProviderError("The improvement service returned an empty response.")

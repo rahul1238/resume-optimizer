@@ -21,6 +21,10 @@
   padding: 48px 0 80px;
 }
 
+.mainActive {
+  padding: 20px 0 32px;
+}
+
 /* ── Page Header ── */
 .pageHeader {
   display: flex;
@@ -76,6 +80,19 @@
   grid-template-columns: 1fr 320px;
   gap: 24px;
   align-items: start;
+}
+
+.workspaceContainer {
+  width: min(1800px, calc(100% - 32px));
+  max-width: 1800px;
+}
+
+.layoutActive {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.layoutActive > .sidebar {
+  display: none;
 }
 
 @media (max-width: 900px) {

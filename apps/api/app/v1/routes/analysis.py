@@ -15,6 +15,7 @@ from app.v1.schemas.analysis import (
     AnalysisSummaryResponse,
     KeywordCoverageRequest,
     KeywordCoverageResponse,
+    ResumePreviewRequest,
 )
 from app.v1.schemas.improvement import (
     ImprovementGenerateRequest,
@@ -108,6 +109,37 @@ async def calculate_keyword_coverage(
         coverage_score=score,
         covered_keywords=covered,
         missing_keywords=missing,
+    )
+
+
+@router.post("/{analysis_id}/preview/pdf")
+async def preview_pdf(
+    analysis_id: str,
+    request: ResumePreviewRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> Response:
+    # Confirm ownership without requiring the draft to be persisted before previewing.
+    await run_in_threadpool(
+        AnalysisService.get,
+        current_user.uid,
+        analysis_id,
+    )
+    content, page_count = await run_in_threadpool(
+        ResumeExportService.to_pdf_preview,
+        request.draft,
+        request.target_pages,
+    )
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": 'inline; filename="resume-preview.pdf"',
+            "X-Resume-Page-Count": str(page_count),
+            "X-Resume-Target-Fit": str(
+                page_count <= request.target_pages
+            ).lower(),
+        },
     )
 
 

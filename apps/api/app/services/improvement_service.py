@@ -7,6 +7,7 @@ from app.ai.schemas import (
     ResumeImprovementResult,
     StructuredResumeDocument,
     StructuredResumeSection,
+    TailoringDecision,
 )
 from app.models.improvement import ImprovementRecord
 from app.repositories.analysis_repository import AnalysisRepository
@@ -104,10 +105,25 @@ class ImprovementService:
                     }
                 )
             )
+        normalized_decisions = []
+        for decision in result.tailoring_decisions:
+            action = decision.action
+            if decision.content_type == "employment" and action == "omit":
+                action = "condense"
+            normalized_decisions.append(
+                decision.model_copy(
+                    update={
+                        "decision_id": decision.decision_id
+                        or ImprovementService._decision_id(decision),
+                        "action": action,
+                    }
+                )
+            )
         return result.model_copy(
             update={
                 "structured_resume": document,
                 "change_set": normalized_changes,
+                "tailoring_decisions": normalized_decisions,
             }
         )
 
@@ -148,6 +164,18 @@ class ImprovementService:
             )
         )
         return f"change-{hashlib.sha256(content.encode()).hexdigest()[:16]}"
+
+    @staticmethod
+    def _decision_id(decision: TailoringDecision) -> str:
+        content = "\x1f".join(
+            (
+                decision.content_type,
+                decision.source_text,
+                decision.action,
+                decision.relevance,
+            )
+        )
+        return f"decision-{hashlib.sha256(content.encode()).hexdigest()[:16]}"
 
     @staticmethod
     def _structure_draft(draft: str) -> StructuredResumeDocument:

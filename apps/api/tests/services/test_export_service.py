@@ -160,3 +160,27 @@ def test_one_page_target_never_silently_returns_two_pages(
 
     with pytest.raises(ResumePageLimitError):
         ResumeExportService.to_pdf(SAMPLE_DRAFT, target_pages=1)
+
+
+def test_preview_returns_readable_overflow_with_actual_page_count(
+    monkeypatch,
+) -> None:
+    oversized = fitz.open()
+    oversized.new_page()
+    oversized.new_page()
+    content = oversized.tobytes()
+    oversized.close()
+    monkeypatch.setattr(
+        ResumeExportService,
+        "_render_pdf",
+        lambda *_args: content,
+    )
+    monkeypatch.setattr(ResumeExportService, "_validate_pdf", lambda *_args: None)
+
+    preview, page_count = ResumeExportService.to_pdf_preview(
+        SAMPLE_DRAFT,
+        target_pages=1,
+    )
+
+    assert preview == content
+    assert page_count == 2

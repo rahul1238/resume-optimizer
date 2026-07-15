@@ -131,29 +131,29 @@ export default function DashboardPage() {
     <div className={styles.page}>
       <Navbar />
 
-      <main className={styles.main}>
-        <div className="container">
+      <main className={`${styles.main} ${result ? styles.mainActive : ""}`}>
+        <div className={`container ${result ? styles.workspaceContainer : ""}`}>
           {/* Header */}
-          <div className={styles.pageHeader}>
+          {!result && <div className={styles.pageHeader}>
             <div>
               <h1 className={styles.greeting}>
                 Hey, <span className="gradient-text">{firstName}</span> 👋
               </h1>
               <p className={styles.greetingSub}>
-                Select a saved resume or upload a new one to analyze a job match.
+                Select your master resume, then create a focused version for each job.
               </p>
             </div>
             {history.length > 0 && (
               <div className={styles.uploadCount}>
                 <span className={styles.uploadCountNum}>{history.length}</span>
                 <span className={styles.uploadCountLabel}>
-                  saved {history.length === 1 ? "resume" : "resumes"}
+                  master {history.length === 1 ? "source" : "sources"}
                 </span>
               </div>
             )}
-          </div>
+          </div>}
 
-          <div className={styles.layout}>
+          <div className={`${styles.layout} ${result ? styles.layoutActive : ""}`}>
             {/* Main Content */}
             <div className={styles.mainCol}>
               {result ? (
@@ -168,9 +168,9 @@ export default function DashboardPage() {
               ) : (
                 <div className={`glass-card ${styles.uploaderCard}`}>
                   <div className={styles.uploaderCardHeader}>
-                    <h2 className={styles.uploaderTitle}>Upload Resume</h2>
+                    <h2 className={styles.uploaderTitle}>Upload Master Resume</h2>
                     <p className={styles.uploaderSubtitle}>
-                      Drag & drop or click to select a PDF or DOCX file
+                      Include every verified skill, project, and experience
                     </p>
                   </div>
                   <div className={styles.uploaderCardBody}>
@@ -183,7 +183,7 @@ export default function DashboardPage() {
             {/* Sidebar — Upload History */}
             <aside className={styles.sidebar}>
               <div className={`glass-card ${styles.historyCard}`}>
-                <h3 className={styles.historyTitle}>Saved Resumes</h3>
+                <h3 className={styles.historyTitle}>Master Resume Sources</h3>
                 {resumesLoading ? (
                   <div className={styles.historyLoading}>
                     <span className="spinner spinner-sm" /> Loading resumes…
@@ -192,7 +192,7 @@ export default function DashboardPage() {
                   <div className={styles.historyEmpty}>
                     <div className={styles.historyEmptyIcon}>📂</div>
                     <p>No uploads yet.</p>
-                    <p>Upload your first resume to get started.</p>
+                    <p>Upload your complete career resume to get started.</p>
                   </div>
                 ) : (
                   <ul className={styles.historyList}>

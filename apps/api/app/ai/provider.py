@@ -18,6 +18,12 @@ class AIProviderConfigurationError(AIProviderError):
     message = "The analysis service is not configured."
 
 
+class AIProviderQuotaError(AIProviderError):
+    status_code = 429
+    code = "ai_provider_quota_exceeded"
+    message = "Gemini's available model quota has been reached. Try again later."
+
+
 class AIProvider(Protocol):
     name: str
     model: str

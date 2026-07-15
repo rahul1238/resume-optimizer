@@ -38,6 +38,7 @@ export default function ResumeResult({ result, onReset }: Props) {
               <span className={`badge badge-${result.file_type}`}>
                 {result.file_type.toUpperCase()}
               </span>
+              <span className="badge">Master source</span>
               <span className="badge badge-success">✓ Parsed</span>
             </div>
           </div>
@@ -78,9 +79,12 @@ export default function ResumeResult({ result, onReset }: Props) {
       </div>
 
       {/* Extracted Text */}
-      <div className={styles.textSection}>
-        <div className={styles.textHeader}>
-          <h4 className={styles.textTitle}>Extracted Text</h4>
+      <details className={styles.textSection}>
+        <summary className={styles.textHeader}>
+          <h4 className={styles.textTitle}>Master Resume Source Text</h4>
+          <span>View parsed content</span>
+        </summary>
+        <div className={styles.textToolbar}>
           <button
             id="copy-text-btn"
             onClick={handleCopy}
@@ -110,7 +114,7 @@ export default function ResumeResult({ result, onReset }: Props) {
             Could not copy the text. Select it manually and try again.
           </p>
         )}
-      </div>
+      </details>
     </div>
   );
 }

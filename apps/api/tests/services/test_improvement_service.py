@@ -1,4 +1,4 @@
-from app.ai.schemas import BulletRewrite, ResumeImprovementResult
+from app.ai.schemas import BulletRewrite, ResumeImprovementResult, TailoringDecision
 from app.services.improvement_service import ImprovementService
 
 
@@ -44,3 +44,24 @@ def test_normalize_assigns_stable_change_ids() -> None:
     assert [item.change_id for item in first.change_set] == [
         item.change_id for item in second.change_set
     ]
+
+
+def test_normalize_never_allows_employment_to_be_omitted() -> None:
+    result = legacy_result().model_copy(
+        update={
+            "tailoring_decisions": [
+                TailoringDecision(
+                    content_type="employment",
+                    source_text="Support Engineer | Example Ltd | 2023-Present",
+                    action="omit",
+                    relevance="irrelevant",
+                    reason="The role is not aligned with the target role.",
+                )
+            ]
+        }
+    )
+
+    normalized = ImprovementService.normalize(result)
+
+    assert normalized.tailoring_decisions[0].action == "condense"
+    assert normalized.tailoring_decisions[0].decision_id.startswith("decision-")

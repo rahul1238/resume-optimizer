@@ -111,6 +111,16 @@ export interface ClarificationQuestion {
   answer: string;
 }
 
+export interface TailoringDecision {
+  decision_id: string;
+  content_type: "skill" | "experience_bullet" | "project" | "employment";
+  source_text: string;
+  action: "include" | "condense" | "omit";
+  relevance: "required" | "recommended" | "supporting" | "irrelevant";
+  reason: string;
+  matched_requirements: string[];
+}
+
 export interface ResumeImprovementResult {
   optimized_resume_draft: string;
   suggested_summary: string;
@@ -122,6 +132,7 @@ export interface ResumeImprovementResult {
   structured_resume: StructuredResumeDocument | null;
   change_set: ResumeChange[];
   clarification_questions: ClarificationQuestion[];
+  tailoring_decisions: TailoringDecision[];
 }
 
 export interface ImprovementResponse {
@@ -307,6 +318,28 @@ export async function saveImprovements(
     },
   );
   return response.json();
+}
+
+export async function getResumePdfPreview(
+  analysisId: string,
+  draft: string,
+  targetPages: 1 | 2,
+  signal?: AbortSignal,
+): Promise<{ blob: Blob; pageCount: number; fitsTarget: boolean }> {
+  const response = await authenticatedRequest(
+    `/api/v1/analyses/${encodeURIComponent(analysisId)}/preview/pdf`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draft, target_pages: targetPages }),
+      signal,
+    },
+  );
+  return {
+    blob: await response.blob(),
+    pageCount: Number(response.headers.get("X-Resume-Page-Count") ?? targetPages),
+    fitsTarget: response.headers.get("X-Resume-Target-Fit") !== "false",
+  };
 }
 
 export async function downloadResumeExport(

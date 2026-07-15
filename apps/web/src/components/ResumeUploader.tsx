@@ -92,7 +92,7 @@ export default function ResumeUploader({ onResult }: Props) {
         onClick={() => !isUploading && inputRef.current?.click()}
         role="button"
         tabIndex={0}
-        aria-label="Upload resume"
+        aria-label="Upload master resume"
         onKeyDown={onDropzoneKeyDown}
         aria-disabled={isUploading}
       >
@@ -124,7 +124,7 @@ export default function ResumeUploader({ onResult }: Props) {
               </svg>
             </div>
             <p className={styles.dropText}>
-              <strong>Drop your resume here</strong> or click to browse
+              <strong>Drop your master resume here</strong> or click to browse
             </p>
             <p className={styles.hint}>PDF or DOCX · Max 5 MB</p>
             <div className={styles.formats}>

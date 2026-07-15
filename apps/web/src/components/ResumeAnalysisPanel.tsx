@@ -9,6 +9,7 @@ import {
   createAnalysis,
   deleteAnalysis,
   downloadResumeExport,
+  getResumePdfPreview,
   getAnalysis,
   generateImprovements,
   ImprovementResponse,
@@ -27,6 +28,8 @@ const ANALYSIS_ERRORS: Record<string, string> = {
   ai_provider_not_configured: "Resume analysis is not configured yet.",
   ai_provider_unavailable:
     "The analysis service is temporarily unavailable or has reached its quota. Try again shortly.",
+  ai_provider_quota_exceeded:
+    "Gemini's free-tier quota is exhausted across the available models. Try again after the quota resets.",
   resume_not_found: "This resume is no longer available. Upload it again to continue.",
   resume_storage_unavailable: "The parsed resume could not be retrieved. Try again shortly.",
   analysis_repository_unavailable:
@@ -62,6 +65,13 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
   const [exporting, setExporting] = useState<"pdf" | "docx" | null>(null);
   const [exportMode, setExportMode] = useState<"ats" | "preserve">("ats");
   const [targetPages, setTargetPages] = useState<1 | 2>(1);
+  const [draftView, setDraftView] = useState<"preview" | "edit">("preview");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewPageCount, setPreviewPageCount] = useState<number | null>(null);
+  const [previewFitsTarget, setPreviewFitsTarget] = useState(true);
+  const [previewRevision, setPreviewRevision] = useState(0);
   const [improvementFeedback, setImprovementFeedback] = useState<Record<string, string>>({});
   const [coverage, setCoverage] = useState<KeywordCoverage | null>(null);
   const [coverageLoading, setCoverageLoading] = useState(false);
@@ -114,6 +124,51 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
       controller.abort();
     };
   }, [analysis, improvement?.result.optimized_resume_draft]);
+
+  useEffect(() => {
+    const draft = improvement?.result.optimized_resume_draft.trim();
+    if (!analysis || !draft) {
+      return;
+    }
+
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+    const timer = window.setTimeout(async () => {
+      setPreviewLoading(true);
+      setPreviewError(null);
+      try {
+        const preview = await getResumePdfPreview(
+          analysis.analysis_id,
+          draft,
+          targetPages,
+          controller.signal,
+        );
+        objectUrl = URL.createObjectURL(preview.blob);
+        setPreviewUrl(objectUrl);
+        setPreviewPageCount(preview.pageCount);
+        setPreviewFitsTarget(preview.fitsTarget);
+      } catch (caught: unknown) {
+        if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+          setPreviewError(caught instanceof ApiClientError
+            ? caught.message
+            : "Could not render the resume preview.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setPreviewLoading(false);
+      }
+    }, 900);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [
+    analysis,
+    improvement?.result.optimized_resume_draft,
+    previewRevision,
+    targetPages,
+  ]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -198,7 +253,10 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
     }
   };
 
-  const handleGenerateImprovements = async (revise = false) => {
+  const handleGenerateImprovements = async (
+    revise = false,
+    supplementalFeedback: string[] = [],
+  ) => {
     if (!analysis) return;
     setError(null);
     setImprovementLoading(true);
@@ -212,7 +270,8 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
             if (question) return `Answer to "${question.question}": ${value.trim()}`;
           }
           return `${section}: ${value.trim()}`;
-        });
+        })
+        .concat(supplementalFeedback);
       const response = await generateImprovements(
         analysis.analysis_id,
         revise && improvement
@@ -222,6 +281,7 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
       setImprovement(response);
       setImprovementSaved(true);
       setImprovementFeedback({});
+      setDraftView("preview");
     } catch (caught: unknown) {
       setError(caught instanceof ApiClientError
         ? ANALYSIS_ERRORS[caught.code] ?? caught.message
@@ -431,8 +491,9 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
   if (analysis) {
     const result = analysis.result;
     return (
-      <>
-        {historySection}
+      <div className={styles.analysisWorkspace}>
+        <aside className={styles.workspaceColumn} aria-label="Analysis history">
+          {historySection}
         <div className={`${styles.panel} animate-slide-up`}>
         <header className={styles.resultHeader}>
           <div className={styles.score} aria-label={`${result.match_score} percent match`}>
@@ -486,7 +547,9 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
           Analysis ID {analysis.analysis_id.slice(0, 8)} · {analysis.model}
         </footer>
         </div>
+        </aside>
 
+        <section className={`${styles.workspaceColumn} ${styles.editorColumn}`} aria-label="Resume change review">
         <section className={styles.improvementPanel}>
           <div className={styles.improvementHeader}>
             <div>
@@ -541,63 +604,56 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
                   </p>
                 </section>
               )}
-              <section className={styles.suggestionBlock}>
-                <div className={styles.draftHeading}>
-                  <div>
-                    <h4>Complete optimized draft</h4>
-                    <p>Edit this draft directly. Manual saves do not call Gemini.</p>
+              {improvement.result.tailoring_decisions.length > 0 && (
+                <section className={styles.selectionBlock}>
+                  <div className={styles.reviewHeading}>
+                    <div>
+                      <h4>Content selected for this role</h4>
+                      <p>The master resume remains unchanged.</p>
+                    </div>
+                    <span>
+                      {improvement.result.tailoring_decisions.filter(
+                        (decision) => decision.action === "omit",
+                      ).length} omitted
+                    </span>
                   </div>
-                  <div className={styles.draftActions}>
-                    <label className={styles.exportOption}>
-                      <span>Layout</span>
-                      <select
-                        className="form-input"
-                        value={exportMode}
-                        onChange={(event) => setExportMode(
-                          event.target.value as "ats" | "preserve",
-                        )}
-                        disabled={exporting !== null}
-                      >
-                        <option value="ats">ATS optimized</option>
-                        <option value="preserve" disabled={sourceFileType !== "docx"}>
-                          Preserve original DOCX
-                        </option>
-                      </select>
-                    </label>
-                    <label className={styles.exportOption}>
-                      <span>Target</span>
-                      <select
-                        className="form-input"
-                        value={targetPages}
-                        onChange={(event) => setTargetPages(
-                          Number(event.target.value) as 1 | 2,
-                        )}
-                        disabled={exporting !== null || exportMode === "preserve"}
-                      >
-                        <option value={1}>1 page</option>
-                        <option value={2}>2 pages</option>
-                      </select>
-                    </label>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={handleSaveImprovements} disabled={improvementSaving || !improvement.result.optimized_resume_draft.trim()}>
-                      {improvementSaving ? "Saving…" : improvementSaved ? "Saved" : "Save draft"}
-                    </button>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => handleExport("docx")} disabled={exporting !== null || !improvement.result.optimized_resume_draft.trim()}>
-                      {exporting === "docx" ? "Preparing…" : "Download DOCX"}
-                    </button>
-                    <button type="button" className="btn btn-primary btn-sm" onClick={() => handleExport("pdf")} disabled={exporting !== null || !improvement.result.optimized_resume_draft.trim()} title="PDF always uses the ATS-optimized layout">
-                      {exporting === "pdf" ? "Preparing…" : "Download PDF"}
-                    </button>
+                  <div className={styles.selectionGroups}>
+                    {(["include", "condense", "omit"] as const).map((action) => {
+                      const decisions = improvement.result.tailoring_decisions.filter(
+                        (decision) => decision.action === action,
+                      );
+                      if (decisions.length === 0) return null;
+                      return (
+                        <details key={action} className={styles.selectionGroup}>
+                          <summary>
+                            <span>{action === "include" ? "Included" : action === "condense" ? "Condensed" : "Omitted"}</span>
+                            <strong>{decisions.length}</strong>
+                          </summary>
+                          <div className={styles.selectionList}>
+                            {decisions.map((decision) => (
+                              <article key={decision.decision_id}>
+                                <div className={styles.changeMeta}>
+                                  <span>{decision.content_type.replace("_", " ")}</span>
+                                  <span>{decision.relevance}</span>
+                                </div>
+                                <p>{decision.source_text}</p>
+                                <small>{decision.reason}</small>
+                                {decision.matched_requirements.length > 0 && (
+                                  <div className={styles.decisionRequirements}>
+                                    {decision.matched_requirements.map((requirement) => (
+                                      <span key={requirement}>{requirement}</span>
+                                    ))}
+                                  </div>
+                                )}
+                              </article>
+                            ))}
+                          </div>
+                        </details>
+                      );
+                    })}
                   </div>
-                </div>
-                <textarea
-                  className={`form-input ${styles.draftEditor}`}
-                  value={improvement.result.optimized_resume_draft}
-                  onChange={(event) => updateOptimizedDraft(event.target.value)}
-                  maxLength={50000}
-                  aria-label="Edit complete optimized resume draft"
-                />
-              </section>
-
+                </section>
+              )}
               {improvement.result.clarification_questions.length > 0 && (
                 <section className={styles.suggestionBlock}>
                   <div className={styles.reviewHeading}>
@@ -733,7 +789,163 @@ export default function ResumeAnalysisPanel({ resumeId, sourceFileType }: Props)
             </p>
           )}
         </section>
-      </>
+        </section>
+
+        <aside className={`${styles.workspaceColumn} ${styles.draftColumn}`} aria-label="Tailored resume draft">
+          <section className={styles.draftPanel}>
+            {improvement ? (
+              <>
+                <div className={styles.draftHeading}>
+                  <div>
+                    <p className={styles.eyebrow}>Tailored resume</p>
+                    <h3>Editable draft</h3>
+                    <p>Manual edits do not call Gemini.</p>
+                  </div>
+                  <div className={styles.draftActions}>
+                    <label className={styles.exportOption}>
+                      <span>Layout</span>
+                      <select
+                        className="form-input"
+                        value={exportMode}
+                        onChange={(event) => setExportMode(
+                          event.target.value as "ats" | "preserve",
+                        )}
+                        disabled={exporting !== null}
+                      >
+                        <option value="ats">ATS optimized</option>
+                        <option value="preserve" disabled={sourceFileType !== "docx"}>
+                          Preserve original DOCX
+                        </option>
+                      </select>
+                    </label>
+                    <label className={styles.exportOption}>
+                      <span>Target</span>
+                      <select
+                        className="form-input"
+                        value={targetPages}
+                        onChange={(event) => setTargetPages(
+                          Number(event.target.value) as 1 | 2,
+                        )}
+                        disabled={exporting !== null || exportMode === "preserve"}
+                      >
+                        <option value={1}>1 page</option>
+                        <option value={2}>2 pages</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                <div className={styles.draftCommands}>
+                  <div className={styles.viewToggle} aria-label="Resume view">
+                    <button
+                      type="button"
+                      className={draftView === "preview" ? styles.viewToggleActive : ""}
+                      onClick={() => setDraftView("preview")}
+                      aria-pressed={draftView === "preview"}
+                    >
+                      Preview
+                    </button>
+                    <button
+                      type="button"
+                      className={draftView === "edit" ? styles.viewToggleActive : ""}
+                      onClick={() => setDraftView("edit")}
+                      aria-pressed={draftView === "edit"}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={handleSaveImprovements} disabled={improvementSaving || !improvement.result.optimized_resume_draft.trim()}>
+                    {improvementSaving ? "Saving…" : improvementSaved ? "Saved" : "Save draft"}
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => handleExport("docx")} disabled={exporting !== null || !improvement.result.optimized_resume_draft.trim()}>
+                    {exporting === "docx" ? "Preparing…" : "Download DOCX"}
+                  </button>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => handleExport("pdf")} disabled={exporting !== null || !improvement.result.optimized_resume_draft.trim()} title="PDF always uses the ATS-optimized layout">
+                    {exporting === "pdf" ? "Preparing…" : "Download PDF"}
+                  </button>
+                </div>
+                {!previewLoading && !previewError && !previewFitsTarget && previewPageCount && (
+                  <div className={styles.previewNotice} role="status">
+                    <span>
+                      Preview is {previewPageCount} pages. The selected {targetPages}-page
+                      limit is still enforced for download.
+                    </span>
+                    <div className={styles.previewNoticeActions}>
+                      {targetPages === 1 && (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          disabled={improvementLoading}
+                          onClick={() => handleGenerateImprovements(true, [
+                            "Fit the optimized resume into one readable ATS page. Preserve contact links, every employer, job title, employment date, and education entry. Keep required and recommended skills and the strongest evidence-backed quantified outcomes. Condense the summary and least relevant supporting bullets first, remove repetition and irrelevant extras, and do not invent claims or shrink content through formatting instructions.",
+                          ])}
+                        >
+                          {improvementLoading ? "Fitting…" : "Fit to 1 page"}
+                        </button>
+                      )}
+                      {targetPages === 1 && previewPageCount <= 2 ? (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => setTargetPages(2)}
+                        >
+                          Use 2 pages
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => setDraftView("edit")}
+                        >
+                          Edit to shorten
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {draftView === "preview" ? (
+                  <div className={styles.previewFrame} aria-live="polite">
+                    {previewUrl && (
+                      <iframe
+                        src={`${previewUrl}#toolbar=1&navpanes=0&view=FitH`}
+                        title="Formatted tailored resume preview"
+                      />
+                    )}
+                    {previewLoading && (
+                      <div className={styles.previewStatus}>
+                        <span className="spinner spinner-sm" /> Rendering formatted resume…
+                      </div>
+                    )}
+                    {!previewLoading && previewError && (
+                      <div className={styles.previewStatus} role="alert">
+                        <p>{previewError}</p>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => setPreviewRevision((value) => value + 1)}
+                        >
+                          Retry preview
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <textarea
+                    className={`form-input ${styles.draftEditor}`}
+                    value={improvement.result.optimized_resume_draft}
+                    onChange={(event) => updateOptimizedDraft(event.target.value)}
+                    maxLength={50000}
+                    aria-label="Edit complete optimized resume draft"
+                  />
+                )}
+              </>
+            ) : (
+              <p className={styles.improvementEmpty}>
+                Generate improvements to open the tailored draft.
+              </p>
+            )}
+          </section>
+        </aside>
+      </div>
     );
   }
 
