@@ -1449,9 +1449,8 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                   <div>
                     <p className={styles.eyebrow}>Tailored resume</p>
                     <h3>Editable draft</h3>
-                    <p>Manual edits do not call Gemini.</p>
                   </div>
-                  {previewPageCount && (
+                  {draftView === "edit" && previewPageCount && (
                     <span className={styles.pageCount}>
                       {previewPageCount} {previewPageCount === 1 ? "page" : "pages"}
                     </span>
@@ -1476,9 +1475,13 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                       Edit
                     </button>
                   </div>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={handleSaveImprovements} disabled={improvementSaving || !improvement.result.optimized_resume_draft.trim()}>
-                    {improvementSaving ? "Saving…" : improvementSaved ? "Saved" : "Save draft"}
-                  </button>
+                  {improvementSaved && !improvementSaving ? (
+                    <span className={styles.savedStatus} role="status">Saved</span>
+                  ) : (
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={handleSaveImprovements} disabled={improvementSaving || !improvement.result.optimized_resume_draft.trim()}>
+                      {improvementSaving ? "Saving…" : "Save draft"}
+                    </button>
+                  )}
                   <button type="button" className="btn btn-primary btn-sm" onClick={handleExport} disabled={exporting || !improvement.result.optimized_resume_draft.trim()}>
                     {exporting ? "Preparing…" : "Download PDF"}
                   </button>
