@@ -1,29 +1,20 @@
-import io
 import logging
 import re
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
 
 import fitz
-from docx import Document
-from docx.enum.section import WD_SECTION
-from docx.enum.text import WD_LINE_SPACING, WD_PARAGRAPH_ALIGNMENT
-from docx.opc.constants import RELATIONSHIP_TYPE as RT
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
 
 from app.ai.schemas import ResumeImprovementResult
 from app.core.config import settings
-from app.parsers.resume_parser import ResumeParser, ResumeParsingError
+from app.models.layout import ResumeLayoutSettings
+from app.parsers.resume_parser import ResumeParser
 from app.repositories.resume_repository import ResumeRepository
 from app.services.improvement_service import ImprovementService
 from app.services.resume_storage_service import ResumeStorageService
 
-ExportMode = Literal["ats", "preserve"]
 logger = logging.getLogger(__name__)
 
 
@@ -40,14 +31,6 @@ class ResumeExportError(Exception):
 class ResumeExportValidationError(ResumeExportError):
     code = "resume_export_validation_failed"
     message = "The generated resume could not be validated for reliable text parsing."
-
-
-class ResumePageLimitError(ResumeExportError):
-    code = "resume_page_limit_exceeded"
-    message = (
-        "The complete resume cannot fit within the selected page limit without "
-        "hurting readability. Shorten the draft or select two pages."
-    )
 
 
 class LatexCompilationError(ResumeExportError):
@@ -77,23 +60,11 @@ class StructuredResume:
 
 
 @dataclass(frozen=True)
-class LayoutProfile:
-    body_size: float
-    leading: float
-    heading_size: float
-    name_size: float
-    margin: float
-    section_space: float
-    line_space: float
-
-
-@dataclass(frozen=True)
 class ExportContext:
     result: ResumeImprovementResult
-    file_type: str
-    original_storage_path: str
     draft: str
-    original_content: bytes
+    company_name: str | None
+    layout: ResumeLayoutSettings
 
 
 class ResumeExportService:
@@ -118,12 +89,6 @@ class ResumeExportService:
         "volunteering",
         "languages",
     }
-    profiles = (
-        LayoutProfile(10, 13, 11, 17, 0.68, 7, 2.5),
-        LayoutProfile(9, 12, 10.5, 16, 0.58, 5, 1.5),
-        LayoutProfile(9, 11, 10, 15, 0.5, 4, 1),
-    )
-
     @classmethod
     def get_context(cls, owner_uid: str, analysis_id: str) -> ExportContext:
         improvement = ImprovementService.get(owner_uid, analysis_id)
@@ -131,30 +96,16 @@ class ResumeExportService:
         if not result.optimized_resume_draft.strip():
             raise ResumeExportError()
         resume = ResumeRepository.get_owned(improvement.resume_id, owner_uid)
-        original_content = ResumeStorageService.read_bytes(
-            resume.original_storage_path
-        )
-        try:
-            if resume.file_type == "pdf":
-                source_text, _ = ResumeParser.parse_pdf(original_content)
-            else:
-                source_text, _ = ResumeParser.parse_docx(original_content)
-        except ResumeParsingError:
-            logger.warning(
-                "Original resume could not be reparsed during export",
-                extra={"resume_id": resume.resume_id},
-            )
-            source_text = ResumeStorageService.read_text(resume.text_storage_path)
+        source_text = ResumeStorageService.read_text(resume.text_storage_path)
         draft = cls._restore_source_links(
             result.optimized_resume_draft,
             source_text,
         )
         return ExportContext(
             result,
-            resume.file_type,
-            resume.original_storage_path,
             draft,
-            original_content,
+            improvement.company_name,
+            ResumeLayoutSettings.model_validate(improvement.layout_settings or {}),
         )
 
     @classmethod
@@ -247,141 +198,51 @@ class ResumeExportService:
         return StructuredResume(header[:6], sections)
 
     @classmethod
-    def to_docx(
+    def to_pdf(
         cls,
         draft: str,
-        target_pages: int = 1,
-        profile: LayoutProfile | None = None,
+        layout: ResumeLayoutSettings | None = None,
     ) -> bytes:
         resume = cls.structure(draft)
-        chosen = profile or cls._profile_for(resume, target_pages)
-        document = Document()
-        section = document.sections[0]
-        section.section_start = WD_SECTION.CONTINUOUS
-        section.page_width = Inches(8.5)
-        section.page_height = Inches(11)
-        section.top_margin = Inches(chosen.margin)
-        section.bottom_margin = Inches(chosen.margin)
-        section.left_margin = Inches(chosen.margin + 0.08)
-        section.right_margin = Inches(chosen.margin + 0.08)
-
-        normal = document.styles["Normal"]
-        normal.font.name = "Arial"
-        normal.font.size = Pt(chosen.body_size)
-        normal._element.rPr.rFonts.set(qn("w:eastAsia"), "Arial")
-        normal.paragraph_format.space_after = Pt(chosen.line_space)
-        normal.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
-
-        name = document.add_paragraph()
-        name.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-        name.paragraph_format.space_after = Pt(2)
-        run = name.add_run(resume.header[0])
-        run.bold = True
-        run.font.name = "Arial"
-        run.font.size = Pt(chosen.name_size)
-        for line in resume.header[1:]:
-            paragraph = document.add_paragraph()
-            paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-            paragraph.paragraph_format.space_after = Pt(1)
-            cls._add_docx_text(paragraph, line)
-
-        for item in resume.sections:
-            heading = document.add_paragraph()
-            heading.paragraph_format.space_before = Pt(chosen.section_space)
-            heading.paragraph_format.space_after = Pt(2)
-            heading.paragraph_format.keep_with_next = True
-            heading_run = heading.add_run(item.heading.upper())
-            heading_run.bold = True
-            heading_run.font.name = "Arial"
-            heading_run.font.size = Pt(chosen.heading_size)
-            heading_run.font.color.rgb = RGBColor(25, 25, 25)
-            cls._add_bottom_border(heading)
-
-            for line in item.lines:
-                if cls.is_bullet(line):
-                    paragraph = document.add_paragraph()
-                    paragraph.style = document.styles["Normal"]
-                    paragraph.paragraph_format.left_indent = Inches(0.16)
-                    paragraph.paragraph_format.first_line_indent = Inches(-0.12)
-                    paragraph.add_run("\u2022 ")
-                    cls._add_docx_text(paragraph, cls.bullet_text(line))
-                else:
-                    paragraph = document.add_paragraph()
-                    cls._add_docx_text(paragraph, line)
-                    paragraph.paragraph_format.keep_together = True
-
-        output = io.BytesIO()
-        document.save(output)
-        content = output.getvalue()
-        cls._validate_docx(content, resume.all_text)
-        return content
-
-    @classmethod
-    def to_pdf(cls, draft: str, target_pages: int = 1) -> bytes:
-        resume = cls.structure(draft)
-        content, _ = cls._fit_pdf(resume, target_pages)
+        content = cls._render_pdf(resume, layout or ResumeLayoutSettings())
         cls._validate_pdf(content, resume.all_text)
         return content
 
     @classmethod
-    def to_pdf_preview(cls, draft: str, target_pages: int = 1) -> tuple[bytes, int]:
+    def to_pdf_preview(
+        cls,
+        draft: str,
+        layout: ResumeLayoutSettings | None = None,
+    ) -> tuple[bytes, int]:
         resume = cls.structure(draft)
-        content, _, page_count = cls._best_fit_pdf(resume, target_pages)
+        content = cls._render_pdf(resume, layout or ResumeLayoutSettings())
+        with fitz.open(stream=content, filetype="pdf") as document:
+            page_count = len(document)
         cls._validate_pdf(content, resume.all_text)
         return content, page_count
 
     @classmethod
-    def preserve_docx(cls, context: ExportContext) -> bytes:
-        if context.file_type != "docx":
-            return cls.to_docx(context.result.optimized_resume_draft)
-        document = Document(io.BytesIO(context.original_content))
-        replacements = {
-            rewrite.original.strip(): rewrite.suggested.strip()
-            for rewrite in context.result.bullet_rewrites
-            if rewrite.original.strip() and rewrite.suggested.strip()
-        }
-        for paragraph in cls._all_docx_paragraphs(document):
-            original_text = paragraph.text.strip()
-            replacement = replacements.get(original_text)
-            if replacement:
-                cls._replace_paragraph_text(paragraph, replacement)
-        output = io.BytesIO()
-        document.save(output)
-        content = output.getvalue()
-        cls._validate_docx(content, "\n".join(replacements.values()))
-        return content
+    def export_filename(cls, context: ExportContext) -> str:
+        resume = cls.structure(context.draft)
+        first_name = cls._filename_part(resume.header[0].split()[0], "Resume")
+        company = cls._filename_part(
+            (context.company_name or "Tailored").split()[0],
+            "Tailored",
+        )
+        return f"{first_name}_{company}.pdf"
+
+    @staticmethod
+    def _filename_part(value: str, fallback: str) -> str:
+        cleaned = re.sub(r"[^A-Za-z0-9]+", "", value)
+        return cleaned or fallback
 
     @classmethod
-    def _profile_for(cls, resume: StructuredResume, target_pages: int) -> LayoutProfile:
-        _, profile = cls._fit_pdf(resume, target_pages)
-        return profile
-
-    @classmethod
-    def _fit_pdf(
-        cls, resume: StructuredResume, target_pages: int
-    ) -> tuple[bytes, LayoutProfile]:
-        content, profile, page_count = cls._best_fit_pdf(resume, target_pages)
-        if page_count > target_pages:
-            raise ResumePageLimitError()
-        return content, profile
-
-    @classmethod
-    def _best_fit_pdf(
-        cls, resume: StructuredResume, target_pages: int
-    ) -> tuple[bytes, LayoutProfile, int]:
-        last_content = b""
-        last_page_count = 0
-        for profile in cls.profiles:
-            last_content = cls._render_pdf(resume, profile)
-            with fitz.open(stream=last_content, filetype="pdf") as document:
-                last_page_count = len(document)
-                if last_page_count <= target_pages:
-                    return last_content, profile, last_page_count
-        return last_content, cls.profiles[-1], last_page_count
-
-    @classmethod
-    def _render_pdf(cls, resume: StructuredResume, profile: LayoutProfile) -> bytes:
-        source = cls._latex_source(resume, profile)
+    def _render_pdf(
+        cls,
+        resume: StructuredResume,
+        layout: ResumeLayoutSettings,
+    ) -> bytes:
+        source = cls._latex_source(resume, layout)
         try:
             with tempfile.TemporaryDirectory(prefix="resume-latex-") as directory:
                 source_path = Path(directory) / "resume.tex"
@@ -414,48 +275,66 @@ class ResumeExportService:
     def _latex_source(
         cls,
         resume: StructuredResume,
-        profile: LayoutProfile,
+        layout: ResumeLayoutSettings,
     ) -> str:
         header_lines = "\\\\\n".join(
             cls._latex_text(line) for line in resume.header[1:]
         )
         sections = "\n".join(cls._latex_section(section) for section in resume.sections)
-        section_before = profile.section_space / 2.835
         heading_style = (
-            rf"\bfseries\fontsize{{{profile.heading_size}}}"
-            rf"{{{profile.heading_size + 2}}}\selectfont"
+            rf"\headingfont\bfseries\fontsize{{{layout.heading_size}}}"
+            rf"{{{layout.heading_size + 2}}}\selectfont"
         )
         name_style = (
-            rf"\bfseries\fontsize{{{profile.name_size}}}"
-            rf"{{{profile.name_size + 2}}}\selectfont"
+            rf"\headingfont\bfseries\fontsize{{{layout.name_size}}}"
+            rf"{{{layout.name_size + 2}}}\selectfont"
         )
         math_sizes = "\n".join(
             rf"\DeclareMathSizes{{{size}}}{{10}}{{7}}{{5}}"
             for size in {
-                profile.body_size,
-                profile.heading_size,
-                profile.name_size,
+                layout.body_size,
+                layout.heading_size,
+                layout.name_size,
             }
         )
         name = cls._latex_text(resume.header[0])
-        return rf"""\documentclass[10pt,letterpaper]{{article}}
-\usepackage[margin={profile.margin}in]{{geometry}}
+        paper = "a4paper" if layout.page_format == "a4" else "letterpaper"
+        body_font = (
+            "lmroman10-regular.otf" if layout.body_font == "serif"
+            else "lmsans10-regular.otf"
+        )
+        body_bold = (
+            "lmroman10-bold.otf" if layout.body_font == "serif"
+            else "lmsans10-bold.otf"
+        )
+        heading_font = (
+            "lmroman10-regular.otf" if layout.heading_font == "serif"
+            else "lmsans10-regular.otf"
+        )
+        heading_bold = (
+            "lmroman10-bold.otf" if layout.heading_font == "serif"
+            else "lmsans10-bold.otf"
+        )
+        leading = layout.body_size * layout.line_spacing
+        return rf"""\documentclass[10pt,{paper}]{{article}}
+\usepackage[top={layout.margin_top}in,right={layout.margin_right}in,bottom={layout.margin_bottom}in,left={layout.margin_left}in]{{geometry}}
 \usepackage{{fontspec}}
 \usepackage{{titlesec}}
 \usepackage{{enumitem}}
 \usepackage[hidelinks]{{hyperref}}
 \usepackage{{xurl}}
-\setmainfont{{lmsans10-regular.otf}}[BoldFont=lmsans10-bold.otf]
+\setmainfont{{{body_font}}}[BoldFont={body_bold}]
+\newfontfamily\headingfont{{{heading_font}}}[BoldFont={heading_bold}]
 \setmonofont{{lmmono10-regular.otf}}
 {math_sizes}
 \pagestyle{{empty}}
 \setlength{{\parindent}}{{0pt}}
-\setlength{{\parskip}}{{{profile.line_space}pt}}
-\setlist[itemize]{{leftmargin=1.15em,itemsep={profile.line_space}pt,topsep=1pt,parsep=0pt}}
+\setlength{{\parskip}}{{{layout.block_spacing}pt}}
+\setlist[itemize]{{leftmargin=1.15em,itemsep={layout.block_spacing}pt,topsep=1pt,parsep=0pt}}
 \titleformat{{\section}}{{{heading_style}}}{{}}{{0pt}}{{\MakeUppercase}}[\vspace{{-2pt}}\titlerule]
-\titlespacing*{{\section}}{{0pt}}{{{section_before:.2f}mm}}{{1.2mm}}
+\titlespacing*{{\section}}{{0pt}}{{{layout.section_spacing}pt}}{{{layout.heading_content_spacing}pt}}
 \begin{{document}}
-\fontsize{{{profile.body_size}}}{{{profile.leading}}}\selectfont
+\fontsize{{{layout.body_size}}}{{{leading:.2f}}}\selectfont
 \begin{{center}}
 {{{name_style} {name}}}\\[1pt]
 {header_lines}
@@ -492,38 +371,6 @@ class ResumeExportService:
             output.append(r"\end{itemize}")
         return "\n".join(output)
 
-    @staticmethod
-    def _add_docx_text(paragraph, text: str) -> None:
-        link_pattern = re.compile(r"(?:https?://|mailto:|tel:)[^\s<>]+")
-        position = 0
-        for match in link_pattern.finditer(text):
-            if match.start() > position:
-                paragraph.add_run(text[position : match.start()])
-            url = match.group(0)
-            relationship_id = paragraph.part.relate_to(
-                url,
-                RT.HYPERLINK,
-                is_external=True,
-            )
-            hyperlink = OxmlElement("w:hyperlink")
-            hyperlink.set(qn("r:id"), relationship_id)
-            run = OxmlElement("w:r")
-            properties = OxmlElement("w:rPr")
-            color = OxmlElement("w:color")
-            color.set(qn("w:val"), "0563C1")
-            underline = OxmlElement("w:u")
-            underline.set(qn("w:val"), "single")
-            properties.extend((color, underline))
-            run.append(properties)
-            value = OxmlElement("w:t")
-            value.text = url
-            run.append(value)
-            hyperlink.append(run)
-            paragraph._p.append(hyperlink)
-            position = match.end()
-        if position < len(text):
-            paragraph.add_run(text[position:])
-
     @classmethod
     def _latex_text(cls, text: str) -> str:
         link_pattern = re.compile(r"(?:https?://|mailto:|tel:)[^\s<>]+")
@@ -552,43 +399,6 @@ class ResumeExportService:
             "^": r"\textasciicircum{}",
         }
         return "".join(replacements.get(character, character) for character in text)
-
-    @staticmethod
-    def _add_bottom_border(paragraph) -> None:
-        properties = paragraph._p.get_or_add_pPr()
-        borders = OxmlElement("w:pBdr")
-        bottom = OxmlElement("w:bottom")
-        bottom.set(qn("w:val"), "single")
-        bottom.set(qn("w:sz"), "4")
-        bottom.set(qn("w:space"), "1")
-        bottom.set(qn("w:color"), "666666")
-        borders.append(bottom)
-        properties.append(borders)
-
-    @staticmethod
-    def _all_docx_paragraphs(document):
-        yield from document.paragraphs
-        for table in document.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    yield from cell.paragraphs
-
-    @staticmethod
-    def _replace_paragraph_text(paragraph, text: str) -> None:
-        if paragraph.runs:
-            paragraph.runs[0].text = text
-            for run in paragraph.runs[1:]:
-                run.text = ""
-        else:
-            paragraph.add_run(text)
-
-    @classmethod
-    def _validate_docx(cls, content: bytes, expected: str) -> None:
-        document = Document(io.BytesIO(content))
-        extracted = "\n".join(
-            paragraph.text for paragraph in cls._all_docx_paragraphs(document)
-        )
-        cls._validate_text(expected, extracted)
 
     @classmethod
     def _validate_pdf(cls, content: bytes, expected: str) -> None:

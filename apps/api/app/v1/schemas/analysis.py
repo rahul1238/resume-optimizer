@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.ai.schemas import ResumeAnalysisResult
 from app.core.config import settings
+from app.models.layout import ResumeLayoutSettings
 
 
 class AnalysisCreateRequest(BaseModel):
@@ -61,4 +62,4 @@ class KeywordCoverageResponse(BaseModel):
 
 class ResumePreviewRequest(BaseModel):
     draft: str = Field(min_length=1, max_length=50_000)
-    target_pages: int = Field(default=1, ge=1, le=2)
+    layout: ResumeLayoutSettings = Field(default_factory=ResumeLayoutSettings)

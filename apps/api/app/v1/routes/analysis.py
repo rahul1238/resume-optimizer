@@ -1,4 +1,4 @@
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
 from starlette.concurrency import run_in_threadpool
@@ -134,7 +134,7 @@ async def preview_pdf(
     content, page_count = await run_in_threadpool(
         ResumeExportService.to_pdf_preview,
         request.draft,
-        request.target_pages,
+        request.layout,
     )
     return Response(
         content=content,
@@ -143,9 +143,6 @@ async def preview_pdf(
             "Cache-Control": "no-store",
             "Content-Disposition": 'inline; filename="resume-preview.pdf"',
             "X-Resume-Page-Count": str(page_count),
-            "X-Resume-Target-Fit": str(
-                page_count <= request.target_pages
-            ).lower(),
         },
     )
 
@@ -223,43 +220,10 @@ async def update_improvement_layout(
     return improvement_response(record)
 
 
-@router.get("/{analysis_id}/export/docx")
-async def export_docx(
-    analysis_id: str,
-    current_user: Annotated[CurrentUser, Depends(get_current_user)],
-    mode: Annotated[Literal["ats", "preserve"], Query()] = "ats",
-    target_pages: Annotated[int, Query(ge=1, le=2)] = 1,
-) -> Response:
-    context = await run_in_threadpool(
-        ResumeExportService.get_context,
-        current_user.uid,
-        analysis_id,
-    )
-    if mode == "preserve":
-        content = await run_in_threadpool(
-            ResumeExportService.preserve_docx,
-            context,
-        )
-    else:
-        content = await run_in_threadpool(
-            ResumeExportService.to_docx,
-            context.draft,
-            target_pages,
-        )
-    return Response(
-        content=content,
-        media_type=(
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        ),
-        headers={"Content-Disposition": 'attachment; filename="optimized-resume.docx"'},
-    )
-
-
 @router.get("/{analysis_id}/export/pdf")
 async def export_pdf(
     analysis_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
-    target_pages: Annotated[int, Query(ge=1, le=2)] = 1,
 ) -> Response:
     context = await run_in_threadpool(
         ResumeExportService.get_context,
@@ -269,12 +233,13 @@ async def export_pdf(
     content = await run_in_threadpool(
         ResumeExportService.to_pdf,
         context.draft,
-        target_pages,
+        context.layout,
     )
+    filename = ResumeExportService.export_filename(context)
     return Response(
         content=content,
         media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="optimized-resume.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

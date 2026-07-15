@@ -1,16 +1,8 @@
-import io
-
 import fitz
-import pytest
-from docx import Document
 
-from app.ai.schemas import BulletRewrite, ResumeImprovementResult
-from app.services.export_service import (
-    ExportContext,
-    ResumeExportService,
-    ResumePageLimitError,
-)
-from app.services.resume_storage_service import ResumeStorageService
+from app.ai.schemas import ResumeImprovementResult
+from app.models.layout import ResumeLayoutSettings
+from app.services.export_service import ExportContext, ResumeExportService
 
 SAMPLE_DRAFT = """Jordan Lee
 jordan@example.com | +1 555 0100 | Austin, TX | https://linkedin.com/in/jordanlee
@@ -36,13 +28,6 @@ def improvement_result() -> ResumeImprovementResult:
         optimized_resume_draft=SAMPLE_DRAFT,
         suggested_summary="Backend engineer building reliable Python services.",
         summary_reason="More concise.",
-        bullet_rewrites=[
-            BulletRewrite(
-                original="Built APIs",
-                suggested="Built reliable APIs serving 10,000 daily requests",
-                reason="Adds scope.",
-            )
-        ],
         ats_recommendations=["Use standard section headings."],
     )
 
@@ -60,68 +45,42 @@ def test_structure_preserves_semantic_hierarchy() -> None:
     assert ResumeExportService.is_bullet(resume.sections[1].lines[1])
 
 
-def test_ats_exports_are_text_parseable_and_fit_one_page() -> None:
-    pdf = ResumeExportService.to_pdf(SAMPLE_DRAFT, target_pages=1)
-    docx = ResumeExportService.to_docx(SAMPLE_DRAFT, target_pages=1)
+def test_latex_source_uses_selected_ats_layout() -> None:
+    layout = ResumeLayoutSettings(
+        page_format="letter",
+        body_font="serif",
+        heading_font="sans",
+        body_size=11,
+        margin_top=0.7,
+        margin_right=0.8,
+        margin_bottom=0.9,
+        margin_left=1,
+        line_spacing=1.3,
+    )
+
+    source = ResumeExportService._latex_source(
+        ResumeExportService.structure(SAMPLE_DRAFT),
+        layout,
+    )
+
+    assert "letterpaper" in source
+    assert "top=0.7in,right=0.8in,bottom=0.9in,left=1.0in" in source
+    assert r"\setmainfont{lmroman10-regular.otf}" in source
+    assert r"\newfontfamily\headingfont{lmsans10-regular.otf}" in source
+    assert r"\fontsize{11.0}{14.30}\selectfont" in source
+
+
+def test_pdf_is_text_parseable_and_preserves_links() -> None:
+    pdf = ResumeExportService.to_pdf(SAMPLE_DRAFT, ResumeLayoutSettings())
 
     with fitz.open(stream=pdf, filetype="pdf") as document:
-        assert len(document) == 1
-        assert "99.95%" in "\n".join(page.get_text() for page in document)
-        assert document[0].get_links()[0]["uri"] == (
-            "https://linkedin.com/in/jordanlee"
-        )
-    word_document = Document(io.BytesIO(docx))
-    text = "\n".join(paragraph.text for paragraph in word_document.paragraphs)
-    assert "PROFESSIONAL SUMMARY" in text
-    assert "99.95%" in text
+        extracted = "\n".join(page.get_text() for page in document)
+        links = [link for page in document for link in page.get_links()]
+
+    assert "99.95%" in extracted
     assert any(
-        relationship.target_ref == "https://linkedin.com/in/jordanlee"
-        for relationship in word_document.part.rels.values()
-        if relationship.is_external
+        link.get("uri") == "https://linkedin.com/in/jordanlee" for link in links
     )
-
-
-@pytest.mark.parametrize("profile", ResumeExportService.profiles)
-def test_every_pdf_layout_profile_has_cached_font_metrics(profile) -> None:
-    content = ResumeExportService._render_pdf(
-        ResumeExportService.structure(SAMPLE_DRAFT),
-        profile,
-    )
-
-    with fitz.open(stream=content, filetype="pdf") as document:
-        assert len(document) >= 1
-        assert "Jordan Lee" in document[0].get_text()
-
-
-def test_preserve_docx_keeps_style_and_applies_exact_rewrite(
-    monkeypatch,
-) -> None:
-    original = Document()
-    paragraph = original.add_paragraph()
-    paragraph.style = original.styles["Normal"]
-    run = paragraph.add_run("Built APIs")
-    run.bold = True
-    source = io.BytesIO()
-    original.save(source)
-    monkeypatch.setattr(
-        ResumeStorageService,
-        "read_bytes",
-        lambda _path: source.getvalue(),
-    )
-    context = ExportContext(
-        improvement_result(),
-        "docx",
-        "original.docx",
-        SAMPLE_DRAFT,
-        source.getvalue(),
-    )
-
-    exported = Document(io.BytesIO(ResumeExportService.preserve_docx(context)))
-
-    assert exported.paragraphs[0].text == (
-        "Built reliable APIs serving 10,000 daily requests"
-    )
-    assert exported.paragraphs[0].runs[0].bold is True
 
 
 def test_restores_links_missing_from_cached_optimized_draft() -> None:
@@ -144,43 +103,32 @@ GitHub: https://github.com/rahul51
     assert any("github.com/rahul51" in line for line in resume.header)
 
 
-def test_one_page_target_never_silently_returns_two_pages(
-    monkeypatch,
-) -> None:
+def test_two_page_pdf_is_returned_without_content_fitting(monkeypatch) -> None:
     oversized = fitz.open()
     oversized.new_page()
     oversized.new_page()
     content = oversized.tobytes()
     oversized.close()
-    monkeypatch.setattr(
-        ResumeExportService,
-        "_render_pdf",
-        lambda *_args: content,
-    )
-
-    with pytest.raises(ResumePageLimitError):
-        ResumeExportService.to_pdf(SAMPLE_DRAFT, target_pages=1)
-
-
-def test_preview_returns_readable_overflow_with_actual_page_count(
-    monkeypatch,
-) -> None:
-    oversized = fitz.open()
-    oversized.new_page()
-    oversized.new_page()
-    content = oversized.tobytes()
-    oversized.close()
-    monkeypatch.setattr(
-        ResumeExportService,
-        "_render_pdf",
-        lambda *_args: content,
-    )
+    monkeypatch.setattr(ResumeExportService, "_render_pdf", lambda *_args: content)
     monkeypatch.setattr(ResumeExportService, "_validate_pdf", lambda *_args: None)
 
+    exported = ResumeExportService.to_pdf(SAMPLE_DRAFT, ResumeLayoutSettings())
     preview, page_count = ResumeExportService.to_pdf_preview(
         SAMPLE_DRAFT,
-        target_pages=1,
+        ResumeLayoutSettings(),
     )
 
+    assert exported == content
     assert preview == content
     assert page_count == 2
+
+
+def test_export_filename_uses_first_name_and_company() -> None:
+    context = ExportContext(
+        result=improvement_result(),
+        draft=SAMPLE_DRAFT,
+        company_name="Example Tech, Inc.",
+        layout=ResumeLayoutSettings(),
+    )
+
+    assert ResumeExportService.export_filename(context) == "Jordan_Example.pdf"

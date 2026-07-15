@@ -224,16 +224,22 @@ def test_pdf_preview_renders_unsaved_draft(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(AnalysisService, "get", lambda *_args: stored_analysis())
-    rendered: list[tuple[str, int]] = []
+    rendered: list[tuple[str, ResumeLayoutSettings]] = []
 
-    def to_pdf_preview(draft: str, target_pages: int) -> tuple[bytes, int]:
-        rendered.append((draft, target_pages))
+    def to_pdf_preview(
+        draft: str,
+        layout: ResumeLayoutSettings,
+    ) -> tuple[bytes, int]:
+        rendered.append((draft, layout))
         return b"%PDF-1.7 preview", 2
 
     monkeypatch.setattr(ResumeExportService, "to_pdf_preview", to_pdf_preview)
     response = client.post(
         "/api/v1/analyses/analysis-id/preview/pdf",
-        json={"draft": "Tailored resume draft", "target_pages": 1},
+        json={
+            "draft": "Tailored resume draft",
+            "layout": {"body_size": 11, "margin_left": 0.7},
+        },
     )
 
     assert response.status_code == 200
@@ -241,6 +247,7 @@ def test_pdf_preview_renders_unsaved_draft(
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["content-disposition"].startswith("inline;")
     assert response.headers["x-resume-page-count"] == "2"
-    assert response.headers["x-resume-target-fit"] == "false"
     assert response.content == b"%PDF-1.7 preview"
-    assert rendered == [("Tailored resume draft", 1)]
+    assert rendered[0][0] == "Tailored resume draft"
+    assert rendered[0][1].body_size == 11
+    assert rendered[0][1].margin_left == 0.7
