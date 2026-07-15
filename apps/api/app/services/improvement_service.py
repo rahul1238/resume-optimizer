@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import hashlib
 import re
 from datetime import UTC, datetime
@@ -23,6 +25,13 @@ from app.services.resume_storage_service import ResumeStorageService
 
 
 class ImprovementService:
+    @staticmethod
+    def list(
+        owner_uid: str,
+        resume_id: str | None = None,
+    ) -> list[ImprovementRecord]:
+        return ImprovementRepository.list_owned(owner_uid, resume_id)
+
     @staticmethod
     def get(owner_uid: str, analysis_id: str) -> ImprovementRecord:
         return ImprovementRepository.get_owned(analysis_id, owner_uid)

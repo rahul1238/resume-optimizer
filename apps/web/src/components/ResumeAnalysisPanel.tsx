@@ -14,15 +14,18 @@ import {
   getResumePdfPreview,
   getAnalysis,
   generateImprovements,
+  getImprovements,
   ImprovementResponse,
   KeywordCoverage,
   listAnalyses,
+  listTailoredResumes,
   proposeBulletOptimization,
   ResumeLayoutSettings,
   scanResumeATS,
   saveImprovementLayout,
   saveImprovements,
   StructuredResumeDocument,
+  TailoredResumeSummary,
 } from "@/lib/api";
 import styles from "./ResumeAnalysisPanel.module.css";
 
@@ -144,6 +147,9 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
   const [history, setHistory] = useState<AnalysisSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyActionId, setHistoryActionId] = useState<string | null>(null);
+  const [tailoredResumes, setTailoredResumes] = useState<TailoredResumeSummary[]>([]);
+  const [tailoredLoading, setTailoredLoading] = useState(true);
+  const [tailoredActionId, setTailoredActionId] = useState<string | null>(null);
   const [improvement, setImprovement] = useState<ImprovementResponse | null>(null);
   const [improvementLoading, setImprovementLoading] = useState(false);
   const [improvementSaving, setImprovementSaving] = useState(false);
@@ -183,6 +189,25 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
         if (!controller.signal.aborted) setAtsLoading(false);
       });
     return () => controller.abort();
+  }, [resumeId]);
+
+  useEffect(() => {
+    let active = true;
+    listTailoredResumes(resumeId)
+      .then((items) => {
+        if (active) setTailoredResumes(items);
+      })
+      .catch((caught: unknown) => {
+        if (active) {
+          setError(caught instanceof ApiClientError
+            ? caught.message
+            : "Could not load tailored resumes.");
+        }
+      })
+      .finally(() => {
+        if (active) setTailoredLoading(false);
+      });
+    return () => { active = false; };
   }, [resumeId]);
 
   useEffect(() => {
@@ -350,6 +375,9 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
       setHistory((previous) => previous.filter(
         (entry) => entry.analysis_id !== item.analysis_id,
       ));
+      setTailoredResumes((previous) => previous.filter(
+        (entry) => entry.analysis_id !== item.analysis_id,
+      ));
       if (analysis?.analysis_id === item.analysis_id) setAnalysis(null);
     } catch (caught: unknown) {
       setError(caught instanceof ApiClientError
@@ -358,6 +386,55 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     } finally {
       setHistoryActionId(null);
     }
+  };
+
+  const handleOpenTailoredResume = async (item: TailoredResumeSummary) => {
+    setError(null);
+    setTailoredActionId(item.analysis_id);
+    try {
+      const [detail, savedImprovement] = await Promise.all([
+        getAnalysis(item.analysis_id),
+        getImprovements(item.analysis_id),
+      ]);
+      setAnalysis(detail);
+      setImprovement(savedImprovement);
+      setImprovementSaved(true);
+      setImprovementFeedback({});
+      setJobTitle(detail.job_title ?? "");
+      setCompanyName(detail.company_name ?? "");
+      setJobDescription(detail.job_description);
+      setDraftView("preview");
+    } catch (caught: unknown) {
+      setError(caught instanceof ApiClientError
+        ? caught.message
+        : "Could not open this tailored resume.");
+    } finally {
+      setTailoredActionId(null);
+    }
+  };
+
+  const rememberTailoredResume = (
+    savedImprovement: ImprovementResponse,
+    detail: AnalysisDetail,
+  ) => {
+    const existing = tailoredResumes.find(
+      (item) => item.analysis_id === savedImprovement.analysis_id,
+    );
+    const summary: TailoredResumeSummary = {
+      analysis_id: savedImprovement.analysis_id,
+      resume_id: savedImprovement.resume_id,
+      base_resume_title: existing?.base_resume_title ?? "Selected base resume",
+      company_name: savedImprovement.company_name ?? detail.company_name,
+      role_name: savedImprovement.role_name ?? detail.job_title,
+      application_date: savedImprovement.application_date,
+      revision: savedImprovement.revision,
+      created_at: savedImprovement.created_at,
+      updated_at: savedImprovement.updated_at,
+    };
+    setTailoredResumes((previous) => [
+      summary,
+      ...previous.filter((item) => item.analysis_id !== summary.analysis_id),
+    ]);
   };
 
   const handleGenerateImprovements = async (
@@ -400,6 +477,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
           : undefined,
       );
       setImprovement(response);
+      rememberTailoredResume(response, analysis);
       setImprovementSaved(true);
       setImprovementFeedback({});
       setDraftView("preview");
@@ -642,6 +720,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
         improvement.layout,
       );
       setImprovement({ ...saved, result: currentResult });
+      rememberTailoredResume(saved, analysis);
     } catch (caught: unknown) {
       setError(caught instanceof ApiClientError
         ? caught.message
@@ -662,6 +741,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
         improvement.result,
       );
       setImprovement({ ...saved, layout: currentLayout });
+      rememberTailoredResume(saved, analysis);
       setImprovementSaved(true);
     } catch (caught: unknown) {
       setError(caught instanceof ApiClientError
@@ -686,6 +766,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
         improvement.layout,
       );
       setImprovement({ ...withLayout, result: saved.result });
+      rememberTailoredResume(withLayout, analysis);
       setImprovementSaved(true);
       await downloadResumeExport(analysis.analysis_id);
     } catch (caught: unknown) {
@@ -751,6 +832,46 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     </section>
   );
 
+  const tailoredSection = (
+    <section className={styles.tailoredPanel} aria-labelledby="tailored-resumes-title">
+      <div className={styles.historyHeader}>
+        <div>
+          <p className={styles.eyebrow}>Saved drafts</p>
+          <h3 id="tailored-resumes-title">Tailored resumes</h3>
+        </div>
+        <span>{tailoredResumes.length}</span>
+      </div>
+      {tailoredLoading ? (
+        <div className={styles.historyState}>
+          <span className="spinner spinner-sm" /> Loading resumes…
+        </div>
+      ) : tailoredResumes.length === 0 ? (
+        <p className={styles.historyState}>No tailored resumes for this base.</p>
+      ) : (
+        <ul className={styles.tailoredList}>
+          {tailoredResumes.map((item) => (
+            <li key={item.analysis_id}>
+              <button
+                type="button"
+                onClick={() => handleOpenTailoredResume(item)}
+                disabled={tailoredActionId === item.analysis_id}
+              >
+                <span className={styles.tailoredRole}>
+                  {item.role_name || "Tailored resume"}
+                </span>
+                <strong>{item.company_name || "Company not specified"}</strong>
+                <small>
+                  {item.application_date || "Date unavailable"} · Revision {item.revision}
+                </small>
+                <small>{item.base_resume_title}</small>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+
   const atsSection = (
     <section className={styles.atsPanel} aria-labelledby="generic-ats-title">
       <div className={styles.atsHeader}>
@@ -794,6 +915,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     return (
       <div className={styles.analysisWorkspace}>
         <aside className={styles.workspaceColumn} aria-label="Analysis history">
+          {tailoredSection}
           {atsSection}
           {historySection}
         <div className={`${styles.panel} animate-slide-up`}>
@@ -1365,6 +1487,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
 
   return (
     <>
+      {tailoredSection}
       {atsSection}
       {historySection}
       <div className={styles.panel}>

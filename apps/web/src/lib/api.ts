@@ -169,6 +169,18 @@ export interface ImprovementResponse {
   result: ResumeImprovementResult;
 }
 
+export interface TailoredResumeSummary {
+  analysis_id: string;
+  resume_id: string;
+  base_resume_title: string;
+  company_name: string | null;
+  role_name: string | null;
+  application_date: string | null;
+  revision: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export interface ResumeLayoutSettings {
   page_format: "a4" | "letter";
   heading_font: "sans" | "serif";
@@ -330,6 +342,14 @@ export async function listAnalyses(resumeId?: string): Promise<AnalysisSummary[]
   return response.json();
 }
 
+export async function listTailoredResumes(
+  resumeId?: string,
+): Promise<TailoredResumeSummary[]> {
+  const query = resumeId ? `?resume_id=${encodeURIComponent(resumeId)}` : "";
+  const response = await authenticatedRequest(`/api/v1/tailored-resumes${query}`);
+  return response.json();
+}
+
 export async function getAnalysis(analysisId: string): Promise<AnalysisDetail> {
   const response = await authenticatedRequest(
     `/api/v1/analyses/${encodeURIComponent(analysisId)}`,
@@ -375,6 +395,15 @@ export async function generateImprovements(
       headers: revision ? { "Content-Type": "application/json" } : undefined,
       body: revision ? JSON.stringify(revision) : undefined,
     },
+  );
+  return response.json();
+}
+
+export async function getImprovements(
+  analysisId: string,
+): Promise<ImprovementResponse> {
+  const response = await authenticatedRequest(
+    `/api/v1/analyses/${encodeURIComponent(analysisId)}/improvements`,
   );
   return response.json();
 }

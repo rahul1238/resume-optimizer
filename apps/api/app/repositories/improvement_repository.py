@@ -1,8 +1,10 @@
 import logging
+from datetime import datetime, timezone
 from functools import lru_cache
 
 from firebase_admin import exceptions, firestore
 from google.api_core.exceptions import GoogleAPICallError
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 from app.auth.firebase import get_firebase_app
 from app.models.improvement import ImprovementRecord
@@ -80,6 +82,38 @@ class ImprovementRepository:
         data = snapshot.to_dict() or {}
         if data.get("owner_uid") != owner_uid:
             raise ImprovementNotFoundError()
+        return cls._from_snapshot(snapshot, data)
+
+    @classmethod
+    def list_owned(
+        cls,
+        owner_uid: str,
+        resume_id: str | None = None,
+    ) -> list[ImprovementRecord]:
+        try:
+            snapshots = (
+                cls._client()
+                .collection(cls.collection_name)
+                .where(filter=FieldFilter("owner_uid", "==", owner_uid))
+                .stream()
+            )
+            records = []
+            for snapshot in snapshots:
+                data = snapshot.to_dict() or {}
+                if resume_id is None or data.get("resume_id") == resume_id:
+                    records.append(cls._from_snapshot(snapshot, data))
+            minimum = datetime.min.replace(tzinfo=timezone.utc)
+            return sorted(
+                records,
+                key=lambda record: record.updated_at or record.created_at or minimum,
+                reverse=True,
+            )
+        except (GoogleAPICallError, exceptions.FirebaseError, ValueError) as error:
+            logger.exception("Failed to list tailored resumes")
+            raise ImprovementRepositoryError() from error
+
+    @staticmethod
+    def _from_snapshot(snapshot, data: dict[str, object]) -> ImprovementRecord:
         return ImprovementRecord(
             analysis_id=snapshot.id,
             owner_uid=data["owner_uid"],
