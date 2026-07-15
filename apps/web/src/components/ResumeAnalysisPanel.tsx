@@ -981,7 +981,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     const result = analysis.result;
     return (
       <div className={styles.analysisWorkspace}>
-        <aside className={styles.workspaceColumn} aria-label="Analysis history">
+        <aside className={`${styles.workspaceColumn} ${styles.stackedColumn}`} aria-label="Analysis history">
           {tailoredSection}
           {atsSection}
           {historySection}
@@ -1568,77 +1568,88 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
   }
 
   return (
-    <>
-      {tailoredSection}
-      {atsSection}
-      {historySection}
-      <div className={styles.panel}>
-      <div className={styles.formHeader}>
-        <p className={styles.eyebrow}>Next step</p>
-        <h3>Compare with a job</h3>
-        <p>Paste the full job description for a more accurate match analysis.</p>
-      </div>
+    <div className={`${styles.analysisWorkspace} ${styles.setupWorkspace}`}>
+      <aside
+        className={`${styles.workspaceColumn} ${styles.stackedColumn}`}
+        aria-label="Saved resume activity"
+      >
+        {tailoredSection}
+        {historySection}
+      </aside>
 
-      <form className={styles.form} onSubmit={handleSubmit}>
-        <div className={styles.optionalFields}>
-          <div className="form-group">
-            <label className="form-label" htmlFor="job-title">Job title</label>
-            <input
-              id="job-title"
-              className="form-input"
-              value={jobTitle}
-              onChange={(event) => setJobTitle(event.target.value)}
-              maxLength={200}
-              placeholder="Backend Engineer"
-              disabled={loading}
-            />
+      <section className={styles.workspaceColumn} aria-label="ATS readiness">
+        {atsSection}
+      </section>
+
+      <section className={styles.workspaceColumn} aria-label="Job setup">
+        <div className={styles.panel}>
+          <div className={styles.formHeader}>
+            <p className={styles.eyebrow}>Next step</p>
+            <h3>Compare with a job</h3>
+            <p>Paste the full job description for a more accurate match analysis.</p>
           </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="company-name">Company</label>
-            <input
-              id="company-name"
-              className="form-input"
-              value={companyName}
-              onChange={(event) => setCompanyName(event.target.value)}
-              maxLength={200}
-              placeholder="Company name"
-              disabled={loading}
-            />
-          </div>
-        </div>
 
-        <div className="form-group">
-          <div className={styles.labelRow}>
-            <label className="form-label" htmlFor="job-description">Job description</label>
-            <span>{jobDescription.length.toLocaleString()} / 30,000</span>
-          </div>
-          <textarea
-            id="job-description"
-            className={`form-input ${styles.textarea}`}
-            value={jobDescription}
-            onChange={(event) => setJobDescription(event.target.value)}
-            minLength={100}
-            maxLength={30000}
-            required
-            placeholder="Paste the responsibilities, requirements, qualifications, and preferred skills..."
-            disabled={loading}
-          />
-        </div>
+          <form className={styles.form} onSubmit={handleSubmit}>
+            <div className={styles.optionalFields}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="job-title">Job title</label>
+                <input
+                  id="job-title"
+                  className="form-input"
+                  value={jobTitle}
+                  onChange={(event) => setJobTitle(event.target.value)}
+                  maxLength={200}
+                  placeholder="Backend Engineer"
+                  disabled={loading}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="company-name">Company</label>
+                <input
+                  id="company-name"
+                  className="form-input"
+                  value={companyName}
+                  onChange={(event) => setCompanyName(event.target.value)}
+                  maxLength={200}
+                  placeholder="Company name"
+                  disabled={loading}
+                />
+              </div>
+            </div>
 
-        {error && <div className="alert alert-error" role="alert">{error}</div>}
+            <div className="form-group">
+              <div className={styles.labelRow}>
+                <label className="form-label" htmlFor="job-description">Job description</label>
+                <span>{jobDescription.length.toLocaleString()} / 30,000</span>
+              </div>
+              <textarea
+                id="job-description"
+                className={`form-input ${styles.textarea}`}
+                value={jobDescription}
+                onChange={(event) => setJobDescription(event.target.value)}
+                minLength={100}
+                maxLength={30000}
+                required
+                placeholder="Paste the responsibilities, requirements, qualifications, and preferred skills..."
+                disabled={loading}
+              />
+            </div>
 
-        <div className={styles.formActions}>
-          <span>Minimum 100 characters</span>
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={loading || jobDescription.trim().length < 100}
-          >
-            {loading ? <><span className="spinner spinner-sm" /> Analyzing…</> : "Analyze match"}
-          </button>
+            {error && <div className="alert alert-error" role="alert">{error}</div>}
+
+            <div className={styles.formActions}>
+              <span>Minimum 100 characters</span>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={loading || jobDescription.trim().length < 100}
+              >
+                {loading ? <><span className="spinner spinner-sm" /> Analyzing…</> : "Analyze match"}
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
-      </div>
-    </>
+      </section>
+    </div>
   );
 }
