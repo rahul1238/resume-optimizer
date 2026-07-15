@@ -158,11 +158,13 @@ that is unsupported by the resume in integrity_notes instead of adding it.
 Treat RESUME as an immutable master career profile containing everything the
 candidate can truthfully claim. Produce a targeted derivative, not another master
 resume. First distinguish required job qualifications from recommended ones.
-Select skills, projects, and experience bullets only when they support a required
-qualification, a recommended qualification, or essential context for the target
-role. For example, a backend application should omit unrelated frontend tools
-unless the job asks for them or they materially support a selected achievement.
-Do not keyword-stuff or retain unrelated content merely because space is available.
+Select skills and experience bullets when they support a required qualification,
+a recommended qualification, or essential context for the target role. For
+example, a backend application should omit unrelated frontend tools unless the job
+asks for them or they materially support a selected achievement. Preserve every
+project from the master resume and preserve each project title exactly. Improve or
+condense project bullets according to relevance, but never remove a project. Do not
+keyword-stuff or retain unrelated skills merely because space is available.
 
 Preserve every employer, role, and date range so tailoring cannot create employment
 gaps. An irrelevant role may be condensed, but never removed. Prefer the strongest
@@ -171,7 +173,8 @@ roles. Keep the master resume unchanged; omissions apply only to this tailored d
 Populate tailoring_decisions for selected and omitted skills, projects, experience
 bullets, and employment entries. Identify whether each item serves a required,
 recommended, supporting, or irrelevant requirement, and cite the matched job
-requirements. Employment decisions must use include or condense, never omit.
+requirements. Employment and project decisions must use include or condense, never
+omit. Include one project decision for every project in the master resume.
 
 For each proposed edit, add one atomic change_set item. Include the exact original
 text, the suggested replacement, its target section, a concise reason, and up to

@@ -61,7 +61,7 @@ class ImprovementService:
             current_result=current_result,
             feedback=feedback,
         )
-        result = ImprovementService.normalize(result)
+        result = ImprovementService.normalize(result, resume_text)
         try:
             existing = ImprovementRepository.get_owned(analysis_id, owner_uid)
         except ImprovementNotFoundError:
@@ -104,7 +104,9 @@ class ImprovementService:
         result: ResumeImprovementResult,
     ) -> ImprovementRecord:
         existing = ImprovementRepository.get_owned(analysis_id, owner_uid)
-        result = ImprovementService.normalize(result)
+        resume = ResumeRepository.get_owned(existing.resume_id, owner_uid)
+        resume_text = ResumeStorageService.read_text(resume.text_storage_path)
+        result = ImprovementService.normalize(result, resume_text)
         record = ImprovementRecord(
             analysis_id=existing.analysis_id,
             owner_uid=existing.owner_uid,
@@ -141,10 +143,15 @@ class ImprovementService:
         return record
 
     @staticmethod
-    def normalize(result: ResumeImprovementResult) -> ResumeImprovementResult:
-        document = result.structured_resume or ImprovementService._structure_draft(
-            result.optimized_resume_draft
+    def normalize(
+        result: ResumeImprovementResult,
+        source_text: str | None = None,
+    ) -> ResumeImprovementResult:
+        draft = ImprovementService._preserve_projects(
+            result.optimized_resume_draft,
+            source_text,
         )
+        document = ImprovementService._structure_draft(draft)
         changes = result.change_set or ImprovementService._legacy_changes(result)
         normalized_changes = []
         for change in changes:
@@ -161,7 +168,7 @@ class ImprovementService:
         normalized_decisions = []
         for decision in result.tailoring_decisions:
             action = decision.action
-            if decision.content_type == "employment" and action == "omit":
+            if decision.content_type in {"employment", "project"} and action == "omit":
                 action = "condense"
             normalized_decisions.append(
                 decision.model_copy(
@@ -183,12 +190,111 @@ class ImprovementService:
         ]
         return result.model_copy(
             update={
+                "optimized_resume_draft": draft,
                 "structured_resume": document,
                 "change_set": normalized_changes,
                 "clarification_questions": normalized_questions,
                 "tailoring_decisions": normalized_decisions,
             }
         )
+
+    @staticmethod
+    def _preserve_projects(draft: str, source_text: str | None) -> str:
+        if not source_text or not draft.strip():
+            return draft
+
+        source = ImprovementService._structure_draft(source_text)
+        source_sections = [
+            section
+            for section in source.sections
+            if ImprovementService._is_project_heading(section.heading)
+        ]
+        if not source_sections:
+            return draft
+
+        document = ImprovementService._structure_draft(draft)
+        project_indices = [
+            index
+            for index, section in enumerate(document.sections)
+            if ImprovementService._is_project_heading(section.heading)
+        ]
+        if not project_indices:
+            document.sections.extend(
+                section.model_copy(deep=True) for section in source_sections
+            )
+            return ImprovementService._serialize_document(document)
+
+        target_index = project_indices[0]
+        target = document.sections[target_index]
+        target_blocks = ImprovementService._project_blocks(target.items)
+        present_titles = {
+            ImprovementService._project_title_key(block[0])
+            for block in target_blocks
+            if block
+        }
+        missing_blocks: list[list[str]] = []
+        for section in source_sections:
+            for block in ImprovementService._project_blocks(section.items):
+                if not block:
+                    continue
+                title = ImprovementService._project_title_key(block[0])
+                if title and title not in present_titles:
+                    missing_blocks.append(block)
+                    present_titles.add(title)
+
+        if not missing_blocks:
+            return draft
+
+        merged_items = target.items.copy()
+        for block in missing_blocks:
+            merged_items.extend(block)
+        document.sections[target_index] = target.model_copy(
+            update={"items": merged_items}
+        )
+        return ImprovementService._serialize_document(document)
+
+    @staticmethod
+    def _is_project_heading(heading: str) -> bool:
+        normalized = re.sub(r"[^a-z]+", " ", heading.lower()).strip()
+        return normalized in {
+            "projects",
+            "academic projects",
+            "key projects",
+            "personal projects",
+            "selected projects",
+        }
+
+    @staticmethod
+    def _project_blocks(items: list[str]) -> list[list[str]]:
+        blocks: list[list[str]] = []
+        current: list[str] = []
+        has_bullet = False
+        for item in items:
+            is_bullet = bool(re.match(r"^\s*[-*\u2022]\s+", item))
+            if current and has_bullet and not is_bullet:
+                blocks.append(current)
+                current = []
+                has_bullet = False
+            current.append(item)
+            has_bullet = has_bullet or is_bullet
+        if current:
+            blocks.append(current)
+        return blocks
+
+    @staticmethod
+    def _project_title_key(title: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()
+
+    @staticmethod
+    def _serialize_document(document: StructuredResumeDocument) -> str:
+        groups: list[str] = []
+        if document.header:
+            groups.append("\n".join(document.header))
+        groups.extend(
+            "\n".join([section.heading, *section.items])
+            for section in document.sections
+        )
+        return "\n\n".join(group for group in groups if group.strip()).strip()
 
     @staticmethod
     def _legacy_changes(result: ResumeImprovementResult) -> list[ResumeChange]:
@@ -259,6 +365,10 @@ class ImprovementService:
             "skills",
             "technical skills",
             "projects",
+            "academic projects",
+            "key projects",
+            "personal projects",
+            "selected projects",
             "certifications",
             "awards",
             "publications",

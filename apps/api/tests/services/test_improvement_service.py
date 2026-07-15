@@ -99,6 +99,70 @@ def test_normalize_never_allows_employment_to_be_omitted() -> None:
     assert normalized.tailoring_decisions[0].decision_id.startswith("decision-")
 
 
+def test_normalize_never_allows_projects_to_be_omitted() -> None:
+    result = legacy_result().model_copy(
+        update={
+            "tailoring_decisions": [
+                TailoringDecision(
+                    content_type="project",
+                    source_text="Resume Optimizer",
+                    action="omit",
+                    relevance="irrelevant",
+                    reason="The project is less relevant to the target role.",
+                )
+            ]
+        }
+    )
+
+    normalized = ImprovementService.normalize(result)
+
+    assert normalized.tailoring_decisions[0].action == "condense"
+
+
+def test_normalize_restores_projects_missing_from_generated_draft() -> None:
+    source = (
+        "Rahul Kumar\n\n"
+        "PROJECTS\n"
+        "Resume Optimizer | Python, FastAPI\n"
+        "- Built an ATS-focused resume editor.\n"
+        "Expense Tracker | Flutter, SQLite\n"
+        "- Implemented offline transaction tracking.\n"
+        "Chat Platform | WebSockets, Redis\n"
+        "- Added real-time messaging and presence.\n\n"
+        "EDUCATION\nB.Tech in Computer Science"
+    )
+    result = legacy_result().model_copy(
+        update={
+            "optimized_resume_draft": (
+                "Rahul Kumar\n\n"
+                "PROJECTS\n"
+                "Resume Optimizer | Python, FastAPI\n"
+                "- Built a production ATS-focused resume editor.\n\n"
+                "EDUCATION\nB.Tech in Computer Science"
+            )
+        }
+    )
+
+    normalized = ImprovementService.normalize(result, source)
+
+    assert (
+        "Built a production ATS-focused resume editor"
+        in normalized.optimized_resume_draft
+    )
+    assert "Expense Tracker | Flutter, SQLite" in normalized.optimized_resume_draft
+    assert "Chat Platform | WebSockets, Redis" in normalized.optimized_resume_draft
+    assert normalized.structured_resume is not None
+    project_section = next(
+        section
+        for section in normalized.structured_resume.sections
+        if section.heading == "PROJECTS"
+    )
+    assert (
+        sum("Tracker" in item or "Platform" in item for item in project_section.items)
+        == 2
+    )
+
+
 def test_update_layout_preserves_draft_metadata_and_increments_revision(
     monkeypatch,
 ) -> None:
