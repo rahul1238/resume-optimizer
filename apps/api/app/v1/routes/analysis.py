@@ -19,6 +19,7 @@ from app.v1.schemas.analysis import (
 )
 from app.v1.schemas.improvement import (
     ImprovementGenerateRequest,
+    ImprovementLayoutUpdateRequest,
     ImprovementResponse,
     ImprovementSaveRequest,
 )
@@ -33,6 +34,12 @@ def improvement_response(record) -> ImprovementResponse:
         provider=record.provider,
         model=record.model,
         created_at=record.created_at,
+        updated_at=record.updated_at,
+        company_name=record.company_name,
+        role_name=record.role_name,
+        application_date=record.application_date,
+        revision=record.revision,
+        layout=record.layout_settings or {},
         result=ImprovementService.result(record),
     )
 
@@ -197,6 +204,21 @@ async def save_improvements(
         current_user.uid,
         analysis_id,
         request.result,
+    )
+    return improvement_response(record)
+
+
+@router.put("/{analysis_id}/improvements/layout", response_model=ImprovementResponse)
+async def update_improvement_layout(
+    analysis_id: str,
+    request: ImprovementLayoutUpdateRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> ImprovementResponse:
+    record = await run_in_threadpool(
+        ImprovementService.update_layout,
+        current_user.uid,
+        analysis_id,
+        request.layout,
     )
     return improvement_response(record)
 

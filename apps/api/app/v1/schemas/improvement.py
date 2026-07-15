@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 
 from app.ai.schemas import ResumeImprovementResult
+from app.models.layout import ResumeLayoutSettings
 
 
 class ImprovementResponse(BaseModel):
@@ -11,6 +12,12 @@ class ImprovementResponse(BaseModel):
     provider: str
     model: str
     created_at: datetime | None
+    updated_at: datetime | None
+    company_name: str | None
+    role_name: str | None
+    application_date: str | None
+    revision: int
+    layout: ResumeLayoutSettings
     result: ResumeImprovementResult
 
 
@@ -29,3 +36,7 @@ class ImprovementGenerateRequest(BaseModel):
 
 class ImprovementSaveRequest(BaseModel):
     result: ResumeImprovementResult
+
+
+class ImprovementLayoutUpdateRequest(BaseModel):
+    layout: ResumeLayoutSettings

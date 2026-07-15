@@ -1,5 +1,6 @@
 import hashlib
 import re
+from datetime import UTC, datetime
 
 from app.ai.factory import get_ai_provider
 from app.ai.schemas import (
@@ -10,6 +11,7 @@ from app.ai.schemas import (
     TailoringDecision,
 )
 from app.models.improvement import ImprovementRecord
+from app.models.layout import ResumeLayoutSettings
 from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.improvement_repository import (
     ImprovementNotFoundError,
@@ -50,6 +52,10 @@ class ImprovementService:
             feedback=feedback,
         )
         result = ImprovementService.normalize(result)
+        try:
+            existing = ImprovementRepository.get_owned(analysis_id, owner_uid)
+        except ImprovementNotFoundError:
+            existing = None
         record = ImprovementRecord(
             analysis_id=analysis_id,
             owner_uid=owner_uid,
@@ -57,6 +63,20 @@ class ImprovementService:
             provider=provider.name,
             model=provider.model,
             result=result.model_dump(),
+            company_name=analysis.company_name,
+            role_name=analysis.job_title,
+            application_date=(
+                existing.application_date
+                if existing
+                else datetime.now(UTC).date().isoformat()
+            ),
+            layout_settings=(
+                existing.layout_settings
+                if existing
+                else ResumeLayoutSettings().model_dump()
+            ),
+            revision=existing.revision + 1 if existing else 1,
+            created_at=existing.created_at if existing else None,
         )
         ImprovementRepository.save(record)
         return record
@@ -82,7 +102,30 @@ class ImprovementService:
             provider=existing.provider,
             model=existing.model,
             result=result.model_dump(),
+            company_name=existing.company_name,
+            role_name=existing.role_name,
+            application_date=existing.application_date,
+            layout_settings=existing.layout_settings,
+            revision=existing.revision + 1,
             created_at=existing.created_at,
+            updated_at=existing.updated_at,
+        )
+        ImprovementRepository.save(record)
+        return record
+
+    @staticmethod
+    def update_layout(
+        owner_uid: str,
+        analysis_id: str,
+        layout: ResumeLayoutSettings,
+    ) -> ImprovementRecord:
+        existing = ImprovementRepository.get_owned(analysis_id, owner_uid)
+        record = ImprovementRecord(
+            **{
+                **existing.__dict__,
+                "layout_settings": layout.model_dump(),
+                "revision": existing.revision + 1,
+            }
         )
         ImprovementRepository.save(record)
         return record

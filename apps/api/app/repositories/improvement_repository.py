@@ -6,6 +6,7 @@ from google.api_core.exceptions import GoogleAPICallError
 
 from app.auth.firebase import get_firebase_app
 from app.models.improvement import ImprovementRecord
+from app.models.layout import ResumeLayoutSettings
 
 logger = logging.getLogger(__name__)
 
@@ -37,17 +38,26 @@ class ImprovementRepository:
     @classmethod
     def save(cls, record: ImprovementRecord) -> None:
         try:
-            cls._client().collection(cls.collection_name).document(
+            document = cls._client().collection(cls.collection_name).document(
                 record.analysis_id
-            ).set(
+            )
+            document.set(
                 {
                     "owner_uid": record.owner_uid,
                     "resume_id": record.resume_id,
                     "provider": record.provider,
                     "model": record.model,
                     "result": record.result,
-                    "created_at": firestore.SERVER_TIMESTAMP,
-                }
+                    "company_name": record.company_name,
+                    "role_name": record.role_name,
+                    "application_date": record.application_date,
+                    "layout_settings": record.layout_settings
+                    or ResumeLayoutSettings().model_dump(),
+                    "revision": record.revision,
+                    "created_at": record.created_at or firestore.SERVER_TIMESTAMP,
+                    "updated_at": firestore.SERVER_TIMESTAMP,
+                },
+                merge=True,
             )
         except (GoogleAPICallError, exceptions.FirebaseError, ValueError) as error:
             logger.exception("Failed to persist resume improvements")
@@ -77,7 +87,14 @@ class ImprovementRepository:
             provider=data["provider"],
             model=data["model"],
             result=data["result"],
+            company_name=data.get("company_name"),
+            role_name=data.get("role_name"),
+            application_date=data.get("application_date"),
+            layout_settings=data.get("layout_settings")
+            or ResumeLayoutSettings().model_dump(),
+            revision=int(data.get("revision", 1)),
             created_at=data.get("created_at"),
+            updated_at=data.get("updated_at"),
         )
 
     @classmethod

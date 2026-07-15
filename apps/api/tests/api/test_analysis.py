@@ -7,9 +7,12 @@ from app.ai.schemas import ResumeAnalysisResult
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.main import app
 from app.models.analysis import AnalysisRecord
+from app.models.improvement import ImprovementRecord
+from app.models.layout import ResumeLayoutSettings
 from app.repositories.analysis_repository import AnalysisNotFoundError
 from app.services.analysis_service import AnalysisService
 from app.services.export_service import ResumeExportService
+from app.services.improvement_service import ImprovementService
 
 client = TestClient(app)
 
@@ -173,6 +176,48 @@ def test_keyword_coverage_is_calculated_without_ai(
         "covered_keywords": ["Python", "C++"],
         "missing_keywords": ["Kubernetes"],
     }
+
+
+def test_layout_update_returns_persisted_tailored_resume(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = ResumeLayoutSettings(body_size=11, margin_left=0.7)
+    result = {
+        "optimized_resume_draft": "Rahul Kumar\n\nEXPERIENCE\n- Built APIs.",
+        "suggested_summary": "Backend engineer.",
+        "summary_reason": "Relevant to the role.",
+        "bullet_rewrites": [],
+        "skills_to_emphasize": ["Python"],
+        "ats_recommendations": ["Use standard headings."],
+    }
+    record = ImprovementRecord(
+        analysis_id="analysis-id",
+        owner_uid="test-user-id",
+        resume_id="resume-id",
+        provider="gemini",
+        model="gemini-3.1-flash-lite",
+        result=result,
+        company_name="Example Tech",
+        role_name="Backend Engineer",
+        application_date="2026-07-15",
+        layout_settings=layout.model_dump(),
+        revision=2,
+    )
+    monkeypatch.setattr(
+        ImprovementService,
+        "update_layout",
+        lambda *_args: record,
+    )
+
+    response = client.put(
+        "/api/v1/analyses/analysis-id/improvements/layout",
+        json={"layout": layout.model_dump()},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["company_name"] == "Example Tech"
+    assert response.json()["revision"] == 2
+    assert response.json()["layout"]["body_size"] == 11
 
 
 def test_pdf_preview_renders_unsaved_draft(

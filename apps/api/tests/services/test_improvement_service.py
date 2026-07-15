@@ -1,4 +1,9 @@
+from datetime import UTC, datetime
+
 from app.ai.schemas import BulletRewrite, ResumeImprovementResult, TailoringDecision
+from app.models.improvement import ImprovementRecord
+from app.models.layout import ResumeLayoutSettings
+from app.repositories.improvement_repository import ImprovementRepository
 from app.services.improvement_service import ImprovementService
 
 
@@ -65,3 +70,40 @@ def test_normalize_never_allows_employment_to_be_omitted() -> None:
 
     assert normalized.tailoring_decisions[0].action == "condense"
     assert normalized.tailoring_decisions[0].decision_id.startswith("decision-")
+
+
+def test_update_layout_preserves_draft_metadata_and_increments_revision(
+    monkeypatch,
+) -> None:
+    created_at = datetime(2026, 7, 15, tzinfo=UTC)
+    existing = ImprovementRecord(
+        analysis_id="analysis-id",
+        owner_uid="user-id",
+        resume_id="resume-id",
+        provider="gemini",
+        model="gemini-3.1-flash-lite",
+        result=legacy_result().model_dump(),
+        company_name="Example Tech",
+        role_name="Backend Engineer",
+        application_date="2026-07-15",
+        layout_settings=ResumeLayoutSettings().model_dump(),
+        revision=3,
+        created_at=created_at,
+    )
+    saved: list[ImprovementRecord] = []
+    monkeypatch.setattr(
+        ImprovementRepository,
+        "get_owned",
+        lambda *_args: existing,
+    )
+    monkeypatch.setattr(ImprovementRepository, "save", saved.append)
+
+    layout = ResumeLayoutSettings(body_size=11, margin_left=0.7)
+    updated = ImprovementService.update_layout("user-id", "analysis-id", layout)
+
+    assert updated.result == existing.result
+    assert updated.company_name == "Example Tech"
+    assert updated.created_at == created_at
+    assert updated.revision == 4
+    assert updated.layout_settings == layout.model_dump()
+    assert saved == [updated]
