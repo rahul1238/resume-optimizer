@@ -58,6 +58,8 @@ class ClarificationQuestion(BaseModel):
     question_id: str = Field(default="", max_length=80)
     requirement: str = Field(min_length=1, max_length=300)
     question: str = Field(min_length=1, max_length=500)
+    target_section: str = Field(default="", max_length=120)
+    integration_mode: Literal["modify_existing", "add_new_line"] | None = None
     status: Literal["unanswered", "answered", "skipped"] = "unanswered"
     answer: str = Field(default="", max_length=1000)
 
@@ -108,6 +110,7 @@ class GeminiResumeChange(BaseModel):
 class GeminiClarificationQuestion(BaseModel):
     requirement: str
     question: str
+    target_section: str
 
 
 class GeminiTailoringDecision(BaseModel):

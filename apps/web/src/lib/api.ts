@@ -124,6 +124,8 @@ export interface ClarificationQuestion {
   question_id: string;
   requirement: string;
   question: string;
+  target_section: string;
+  integration_mode: "modify_existing" | "add_new_line" | null;
   status: "unanswered" | "answered" | "skipped";
   answer: string;
 }

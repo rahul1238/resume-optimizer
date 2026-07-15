@@ -179,9 +179,15 @@ five exact facts from the resume as evidence. Set requires_confirmation to true
 when the evidence is indirect or incomplete. Use confidence conservatively.
 For an important job requirement that may be relevant but is not supported, create
 a clarification_question that asks about the candidate's real experience instead
-of adding the requirement. Do not ask about requirements that are clearly
-irrelevant. Return structured_resume with the complete draft divided into header
-and sections; every structured item must also appear in optimized_resume_draft.
+of adding the requirement. Identify the target resume section for each question.
+Do not ask about requirements that are clearly irrelevant. Never add an unsupported
+requirement unless USER EDITING FEEDBACK contains both the candidate's factual
+answer and an explicit integration method. For modify_existing, propose a rewrite
+to the relevant existing item. For add_new_line, propose one new ATS-readable line
+in the target section. In both cases, create an atomic change_set item and preserve
+the user's answer as evidence. Return structured_resume with the complete draft
+divided into header and sections; every structured item must also appear in
+optimized_resume_draft.
 
 When a current draft and user feedback are provided, revise the draft according
 to those editing preferences, but treat them as preferences rather than factual

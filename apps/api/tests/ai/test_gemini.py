@@ -137,7 +137,13 @@ def test_compact_improvement_schema_converts_to_domain_result() -> None:
                 "requires_confirmation": False,
             }
         ],
-        clarification_questions=[],
+        clarification_questions=[
+            {
+                "requirement": "Kubernetes",
+                "question": "Have you deployed services to Kubernetes?",
+                "target_section": "Experience",
+            }
+        ],
         tailoring_decisions=[],
     )
 
@@ -146,3 +152,5 @@ def test_compact_improvement_schema_converts_to_domain_result() -> None:
     assert result.change_set[0].status == "proposed"
     assert result.change_set[0].change_id == ""
     assert result.structured_resume is None
+    assert result.clarification_questions[0].target_section == "Experience"
+    assert result.clarification_questions[0].integration_mode is None

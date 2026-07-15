@@ -365,19 +365,33 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     supplementalFeedback: string[] = [],
   ) => {
     if (!analysis) return;
+    if (revise && improvement) {
+      const missingMode = improvement.result.clarification_questions.some(
+        (question) => question.answer.trim() && !question.integration_mode,
+      );
+      if (missingMode) {
+        setError("Choose how each confirmed requirement should be integrated.");
+        return;
+      }
+    }
     setError(null);
     setImprovementLoading(true);
     try {
       const feedback = Object.entries(improvementFeedback)
-        .filter(([, value]) => value.trim())
+        .filter(([key, value]) => !key.startsWith("question-") && value.trim())
         .map(([section, value]) => {
-          if (section.startsWith("question-") && improvement) {
-            const index = Number(section.slice("question-".length));
-            const question = improvement.result.clarification_questions[index];
-            if (question) return `Answer to "${question.question}": ${value.trim()}`;
-          }
           return `${section}: ${value.trim()}`;
         })
+        .concat(
+          improvement?.result.clarification_questions
+            .filter((question) => question.answer.trim() && question.integration_mode)
+            .map((question) => (
+              `Confirmed requirement "${question.requirement}". `
+              + `Target section: ${question.target_section || "best matching section"}. `
+              + `Integration method: ${question.integration_mode}. `
+              + `Candidate evidence: ${question.answer.trim()}`
+            )) ?? [],
+        )
         .concat(supplementalFeedback);
       const response = await generateImprovements(
         analysis.analysis_id,
@@ -416,6 +430,24 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                 answer: value,
                 status: value.trim() ? "answered" : "unanswered",
               }
+            : question,
+        ),
+      },
+    } : current);
+  };
+
+  const updateClarificationMode = (
+    index: number,
+    mode: "modify_existing" | "add_new_line",
+  ) => {
+    setImprovementSaved(false);
+    setImprovement((current) => current ? {
+      ...current,
+      result: {
+        ...current.result,
+        clarification_questions: current.result.clarification_questions.map(
+          (question, itemIndex) => itemIndex === index
+            ? { ...question, integration_mode: mode }
             : question,
         ),
       },
@@ -1067,8 +1099,11 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                   </div>
                   <div className={styles.clarifications}>
                     {improvement.result.clarification_questions.map((question, index) => (
-                      <label key={question.question_id || `${question.requirement}-${index}`} className={styles.clarification}>
-                        <span>{question.requirement}</span>
+                      <article key={question.question_id || `${question.requirement}-${index}`} className={styles.clarification}>
+                        <span>
+                          {question.requirement}
+                          {question.target_section && ` · ${question.target_section}`}
+                        </span>
                         <strong>{question.question}</strong>
                         <textarea
                           className="form-input"
@@ -1080,7 +1115,31 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                           maxLength={1000}
                           placeholder="Describe only experience you actually have"
                         />
-                      </label>
+                        <div className={styles.integrationModes} aria-label="Integration method">
+                          <button
+                            type="button"
+                            className={question.integration_mode === "modify_existing"
+                              ? styles.integrationModeActive
+                              : ""}
+                            onClick={() => updateClarificationMode(index, "modify_existing")}
+                            disabled={!question.answer.trim()}
+                            aria-pressed={question.integration_mode === "modify_existing"}
+                          >
+                            Modify existing
+                          </button>
+                          <button
+                            type="button"
+                            className={question.integration_mode === "add_new_line"
+                              ? styles.integrationModeActive
+                              : ""}
+                            onClick={() => updateClarificationMode(index, "add_new_line")}
+                            disabled={!question.answer.trim()}
+                            aria-pressed={question.integration_mode === "add_new_line"}
+                          >
+                            Add new line
+                          </button>
+                        </div>
+                      </article>
                     ))}
                   </div>
                 </section>

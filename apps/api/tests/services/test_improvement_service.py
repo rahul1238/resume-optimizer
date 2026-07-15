@@ -1,6 +1,11 @@
 from datetime import UTC, datetime
 
-from app.ai.schemas import BulletRewrite, ResumeImprovementResult, TailoringDecision
+from app.ai.schemas import (
+    BulletRewrite,
+    ClarificationQuestion,
+    ResumeImprovementResult,
+    TailoringDecision,
+)
 from app.models.improvement import ImprovementRecord
 from app.models.layout import ResumeLayoutSettings
 from app.repositories.improvement_repository import ImprovementRepository
@@ -49,6 +54,28 @@ def test_normalize_assigns_stable_change_ids() -> None:
     assert [item.change_id for item in first.change_set] == [
         item.change_id for item in second.change_set
     ]
+
+
+def test_normalize_assigns_stable_section_aware_question_ids() -> None:
+    result = legacy_result().model_copy(
+        update={
+            "clarification_questions": [
+                ClarificationQuestion(
+                    requirement="Kubernetes",
+                    question="Have you deployed services to Kubernetes?",
+                    target_section="Experience",
+                )
+            ]
+        }
+    )
+
+    first = ImprovementService.normalize(result)
+    second = ImprovementService.normalize(result)
+
+    assert first.clarification_questions[0].question_id.startswith("question-")
+    assert first.clarification_questions[0].question_id == (
+        second.clarification_questions[0].question_id
+    )
 
 
 def test_normalize_never_allows_employment_to_be_omitted() -> None:

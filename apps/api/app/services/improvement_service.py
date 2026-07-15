@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 from app.ai.factory import get_ai_provider
 from app.ai.schemas import (
+    ClarificationQuestion,
     ResumeChange,
     ResumeImprovementResult,
     StructuredResumeDocument,
@@ -162,10 +163,20 @@ class ImprovementService:
                     }
                 )
             )
+        normalized_questions = [
+            question.model_copy(
+                update={
+                    "question_id": question.question_id
+                    or ImprovementService._question_id(question)
+                }
+            )
+            for question in result.clarification_questions
+        ]
         return result.model_copy(
             update={
                 "structured_resume": document,
                 "change_set": normalized_changes,
+                "clarification_questions": normalized_questions,
                 "tailoring_decisions": normalized_decisions,
             }
         )
@@ -219,6 +230,13 @@ class ImprovementService:
             )
         )
         return f"decision-{hashlib.sha256(content.encode()).hexdigest()[:16]}"
+
+    @staticmethod
+    def _question_id(question: ClarificationQuestion) -> str:
+        content = "\x1f".join(
+            (question.requirement, question.question, question.target_section)
+        )
+        return f"question-{hashlib.sha256(content.encode()).hexdigest()[:16]}"
 
     @staticmethod
     def _structure_draft(draft: str) -> StructuredResumeDocument:
