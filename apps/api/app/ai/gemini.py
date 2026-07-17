@@ -31,7 +31,7 @@ class GeminiProvider:
             dict.fromkeys([settings.gemini_model, *settings.gemini_fallback_models])
         )
         self._client = genai.Client(
-            api_key=settings.gemini_api_key,
+            api_key=settings.gemini_api_key.get_secret_value(),
             http_options=types.HttpOptions(
                 timeout=settings.gemini_timeout_seconds * 1000
             ),

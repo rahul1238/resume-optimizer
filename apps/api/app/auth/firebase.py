@@ -14,10 +14,12 @@ def get_firebase_app() -> App:
         options: dict[str, str] = {}
         if settings.firebase_project_id:
             options["projectId"] = settings.firebase_project_id
+        service_account = (
+            settings.firebase_service_account_data()
+            or settings.firebase_service_account_path
+        )
         credential = (
-            credentials.Certificate(settings.firebase_service_account_path)
-            if settings.firebase_service_account_path
-            else None
+            credentials.Certificate(service_account) if service_account else None
         )
         return firebase_admin.initialize_app(
             credential=credential,

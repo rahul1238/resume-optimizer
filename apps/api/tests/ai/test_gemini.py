@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 from google.genai import errors
+from pydantic import SecretStr
 
 from app.ai.gemini import GeminiProvider
 from app.ai.provider import AIProviderError, AIProviderQuotaError
@@ -22,7 +23,7 @@ def analysis_result() -> ResumeAnalysisResult:
 
 
 def provider_with_client(monkeypatch: pytest.MonkeyPatch, generate_content):
-    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+    monkeypatch.setattr(settings, "gemini_api_key", SecretStr("test-key"))
     monkeypatch.setattr(settings, "gemini_model", "primary-model")
     monkeypatch.setattr(
         settings,

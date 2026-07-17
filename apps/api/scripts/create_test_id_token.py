@@ -18,7 +18,7 @@ def exchange_custom_token(custom_token: str) -> str:
 
     url = (
         "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken"
-        f"?key={settings.firebase_web_api_key}"
+        f"?key={settings.firebase_web_api_key.get_secret_value()}"
     )
     payload = json.dumps(
         {"token": custom_token, "returnSecureToken": True}
