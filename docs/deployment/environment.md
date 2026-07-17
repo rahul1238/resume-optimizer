@@ -31,3 +31,6 @@ along with `NEXT_PUBLIC_API_BASE_URL` pointing to the deployed HTTPS API URL.
 Use [the web environment example](../../apps/web/.env.local.example) as the
 complete frontend checklist. Firebase Security Rules and backend ID-token
 verification provide access control; the public web API key is not a secret.
+
+Continue with the [Render API deployment](render.md) after preparing these
+values.
