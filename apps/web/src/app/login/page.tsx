@@ -31,7 +31,7 @@ function getFirebaseErrorMessage(code: string): string {
     "auth/cancelled-popup-request": "A Google sign-in window is already open.",
     "auth/invalid-credential": "Invalid email or password.",
     "auth/unauthorized-domain":
-      "This domain is not authorised. Add 'localhost' under Firebase Console → Authentication → Settings → Authorised domains.",
+      "This domain is not authorised. Add the current Hosting domain under Firebase Console → Authentication → Settings → Authorised domains.",
     "auth/operation-not-allowed":
       "Google sign-in is not enabled. Enable it in Firebase Console → Authentication → Sign-in method → Google.",
     "auth/internal-error":

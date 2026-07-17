@@ -33,4 +33,4 @@ complete frontend checklist. Firebase Security Rules and backend ID-token
 verification provide access control; the public web API key is not a secret.
 
 Continue with the [Render API deployment](render.md) after preparing these
-values.
+values, then configure [Firebase Hosting](firebase-hosting.md) for the web app.
