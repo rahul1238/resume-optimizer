@@ -1,4 +1,4 @@
-FROM python:3.12-slim-bookworm
+FROM python:3.12-alpine3.24
 
 ARG TARGETARCH
 ARG TECTONIC_VERSION=0.16.9
@@ -12,8 +12,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TECTONIC_BINARY=/usr/local/bin/tectonic \
     TECTONIC_ONLY_CACHED=true
 
-RUN apt-get update \
-    && apt-get install --no-install-recommends -y ca-certificates curl \
+RUN apk add --no-cache ca-certificates libstdc++ \
+    && apk add --no-cache --virtual .download-deps curl \
     && case "${TARGETARCH}" in \
         amd64) \
             TECTONIC_ARCH="x86_64-unknown-linux-musl"; \
@@ -27,11 +27,11 @@ RUN apt-get update \
     && curl --fail --location --retry 3 \
         "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${TECTONIC_VERSION}/${TECTONIC_ARCHIVE}" \
         --output "/tmp/${TECTONIC_ARCHIVE}" \
-    && echo "${TECTONIC_SHA256}  /tmp/${TECTONIC_ARCHIVE}" | sha256sum --check - \
+    && echo "${TECTONIC_SHA256}  /tmp/${TECTONIC_ARCHIVE}" | sha256sum -c - \
     && tar --extract --gzip --file "/tmp/${TECTONIC_ARCHIVE}" --directory /usr/local/bin tectonic \
     && chmod 0755 /usr/local/bin/tectonic \
     && rm "/tmp/${TECTONIC_ARCHIVE}" \
-    && rm -rf /var/lib/apt/lists/*
+    && apk del .download-deps
 
 COPY docker/tectonic-warmup.tex /tmp/tectonic-warmup.tex
 
@@ -44,9 +44,10 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY app ./app
 
-RUN pip install . \
-    && addgroup --system app \
-    && adduser --system --ingroup app --home /home/app app \
+RUN pip install --upgrade pip==26.1.2 \
+    && pip install . \
+    && addgroup -S app \
+    && adduser -S -G app -h /home/app app \
     && chown -R app:app /app "${XDG_CACHE_HOME}"
 
 USER app
