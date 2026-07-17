@@ -1,0 +1,19 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=0.5in]{geometry}
+\usepackage{fontspec}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xurl}
+\setmainfont{lmsans10-regular.otf}[BoldFont=lmsans10-bold.otf]
+\newfontfamily\headingfont{lmroman10-regular.otf}[BoldFont=lmroman10-bold.otf]
+\setmonofont{lmmono10-regular.otf}
+\pagestyle{empty}
+\begin{document}
+{\headingfont\bfseries Resume Optimizer}
+\section*{Experience}
+\begin{itemize}
+  \item Built an ATS-readable PDF with a visible link:
+  \href{https://example.com}{\nolinkurl{https://example.com}}.
+\end{itemize}
+\end{document}
