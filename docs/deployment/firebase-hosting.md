@@ -37,3 +37,5 @@ The Jenkins pipeline will automate these commands after its credentials are
 configured. Firebase Hosting on Spark includes no-cost usage quotas and stops
 serving after those quotas are exhausted. Do not link a billing account, because
 that automatically upgrades the project from Spark to the Blaze plan.
+
+Configure [local Jenkins CI](jenkins.md) before adding deployment credentials.
