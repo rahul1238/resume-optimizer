@@ -13,7 +13,6 @@ services:
     dockerContext: ./apps/api
     healthCheckPath: /api/v1/health/
     autoDeployTrigger: "off"
-    maxShutdownDelaySeconds: 30
     envVars:
       - key: APP_ENV
         value: production
