@@ -69,10 +69,15 @@ pipeline {
         stage('Vulnerability gate') {
             steps {
                 sh '''
-                    docker scout version
-                    docker scout cves --exit-code \
-                        --only-severity critical,high \
-                        "local://$API_IMAGE"
+                    docker run --rm \
+                        --volume /var/run/docker.sock:/var/run/docker.sock \
+                        --volume trivy-cache:/root/.cache/trivy \
+                        aquasec/trivy:0.72.0 image \
+                        --quiet \
+                        --exit-code 1 \
+                        --severity CRITICAL,HIGH \
+                        --ignore-unfixed \
+                        "$API_IMAGE"
                 '''
             }
         }
