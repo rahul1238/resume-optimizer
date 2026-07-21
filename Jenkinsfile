@@ -85,7 +85,7 @@ pipeline {
         stage('Production guard') {
             steps {
                 sh '''
-                    test "$GIT_COMMIT" = \
+                    test "$(git rev-parse HEAD)" = \
                         "$(git rev-parse refs/remotes/origin/main)"
                 '''
             }
@@ -97,7 +97,10 @@ pipeline {
                     string(credentialsId: 'render-api-key', variable: 'RENDER_API_KEY'),
                     string(credentialsId: 'render-service-id', variable: 'RENDER_SERVICE_ID')
                 ]) {
-                    sh 'python3 scripts/deploy_render.py --commit "$GIT_COMMIT"'
+                    sh '''
+                        python3 scripts/deploy_render.py \
+                            --commit "$(git rev-parse HEAD)"
+                    '''
                 }
             }
         }
