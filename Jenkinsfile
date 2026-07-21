@@ -5,7 +5,7 @@ pipeline {
         disableConcurrentBuilds()
         skipDefaultCheckout(true)
         timestamps()
-        timeout(time: 45, unit: 'MINUTES')
+        timeout(time: 60, unit: 'MINUTES')
     }
 
     environment {
@@ -24,6 +24,9 @@ pipeline {
         stage('API quality') {
             steps {
                 sh '''
+                    python3 -m unittest discover \
+                        --start-directory scripts/tests \
+                        --pattern 'test_*.py'
                     docker build --platform linux/amd64 --target test \
                         --tag "$API_TEST_IMAGE" apps/api
                     docker run --rm "$API_TEST_IMAGE" \
@@ -72,6 +75,63 @@ pipeline {
                         --only-severity critical,high \
                         "local://$API_IMAGE"
                 '''
+            }
+        }
+
+        stage('Deploy API') {
+            when {
+                expression {
+                    env.BRANCH_NAME == 'main' ||
+                        env.GIT_BRANCH == 'main' ||
+                        env.GIT_BRANCH == 'origin/main'
+                }
+            }
+            steps {
+                withCredentials([
+                    string(credentialsId: 'render-api-key', variable: 'RENDER_API_KEY'),
+                    string(credentialsId: 'render-service-id', variable: 'RENDER_SERVICE_ID')
+                ]) {
+                    sh 'python3 scripts/deploy_render.py --commit "$GIT_COMMIT"'
+                }
+            }
+        }
+
+        stage('Deploy web') {
+            when {
+                expression {
+                    env.BRANCH_NAME == 'main' ||
+                        env.GIT_BRANCH == 'main' ||
+                        env.GIT_BRANCH == 'origin/main'
+                }
+            }
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'firebase-service-account',
+                        variable: 'GOOGLE_APPLICATION_CREDENTIALS'
+                    ),
+                    file(
+                        credentialsId: 'web-production-env',
+                        variable: 'WEB_PRODUCTION_ENV'
+                    )
+                ]) {
+                    sh '''
+                        trap 'rm -f apps/web/.env.production.local' EXIT
+                        cp "$WEB_PRODUCTION_ENV" apps/web/.env.production.local
+                        npm --prefix apps/web run build
+                        test -f apps/web/out/index.html
+                        test -f apps/web/out/login.html
+                        test -f apps/web/out/dashboard.html
+
+                        FIREBASE_PROJECT_ID="$(node -p \
+                            "JSON.parse(require('fs').readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8')).project_id")"
+                        test -n "$FIREBASE_PROJECT_ID"
+                        npx --yes firebase-tools@15.24.0 deploy \
+                            --only hosting \
+                            --project "$FIREBASE_PROJECT_ID" \
+                            --non-interactive
+                    '''
+                }
             }
         }
     }

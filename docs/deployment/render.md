@@ -29,5 +29,12 @@ Do not add synthetic keep-alive requests: they consume the workspace's included
 instance hours and bandwidth without removing the Free tier's other limits.
 
 Automatic Render deploys are disabled in the Blueprint. The initial Blueprint
-creation performs the first deploy; a later Jenkins step will trigger subsequent
-deployments only after tests and image checks pass.
+creation performs the first deploy. Subsequent `main` deployments are triggered
+through Render's API only after Jenkins tests and image checks pass. Jenkins
+sends the exact Git commit SHA and polls its deployment until it reaches `live`;
+a failed, canceled, unknown, or timed-out deployment fails the pipeline.
+
+Create a Render API key under **Account Settings > API Keys**, then add it and
+the service ID to Jenkins as described in [local Jenkins CI/CD](jenkins.md).
+Render API keys can access the workspaces available to their owner, so never put
+the key in the repository or a frontend environment file.

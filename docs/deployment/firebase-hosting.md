@@ -33,9 +33,14 @@ The build must produce `apps/web/out/index.html`, `login.html`, and
 firebase deploy --only hosting --project your-firebase-project-id
 ```
 
-The Jenkins pipeline will automate these commands after its credentials are
-configured. Firebase Hosting on Spark includes no-cost usage quotas and stops
+Jenkins invokes Firebase CLI `15.24.0` explicitly, so deployments do not depend
+on a globally installed version. It authenticates with Application Default
+Credentials from its `firebase-service-account` secret-file credential;
+interactive login and legacy `FIREBASE_TOKEN` credentials are not used.
+
+Firebase Hosting on Spark includes no-cost usage quotas and stops
 serving after those quotas are exhausted. Do not link a billing account, because
 that automatically upgrades the project from Spark to the Blaze plan.
 
-Configure [local Jenkins CI](jenkins.md) before adding deployment credentials.
+Configure the credentials in [local Jenkins CI/CD](jenkins.md) before running a
+`main` build.
