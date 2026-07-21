@@ -82,14 +82,16 @@ pipeline {
             }
         }
 
-        stage('Deploy API') {
-            when {
-                expression {
-                    env.BRANCH_NAME == 'main' ||
-                        env.GIT_BRANCH == 'main' ||
-                        env.GIT_BRANCH == 'origin/main'
-                }
+        stage('Production guard') {
+            steps {
+                sh '''
+                    test "$GIT_COMMIT" = \
+                        "$(git rev-parse refs/remotes/origin/main)"
+                '''
             }
+        }
+
+        stage('Deploy API') {
             steps {
                 withCredentials([
                     string(credentialsId: 'render-api-key', variable: 'RENDER_API_KEY'),
@@ -101,13 +103,6 @@ pipeline {
         }
 
         stage('Deploy web') {
-            when {
-                expression {
-                    env.BRANCH_NAME == 'main' ||
-                        env.GIT_BRANCH == 'main' ||
-                        env.GIT_BRANCH == 'origin/main'
-                }
-            }
             steps {
                 withCredentials([
                     file(
