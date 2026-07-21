@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 
 from app.ai.schemas import (
@@ -161,6 +162,32 @@ def test_normalize_restores_projects_missing_from_generated_draft() -> None:
         sum("Tracker" in item or "Platform" in item for item in project_section.items)
         == 2
     )
+
+
+def test_structure_draft_ignores_pdf_header_separators_and_preserves_overflow() -> None:
+    meaningful_header = [f"Profile detail {index}" for index in range(22)]
+    draft = "\n".join(
+        [
+            "Rahul Kumar",
+            *[value for pair in zip(["–"] * 21, ["|"] * 21) for value in pair],
+            *meaningful_header,
+            "LinkedIn: https://linkedin.com/in/rahul51",
+            "PROJECTS",
+            "Resume Optimizer",
+            "- Built an ATS-focused resume editor.",
+        ]
+    )
+
+    document = ImprovementService._structure_draft(draft)
+
+    assert all(re.search(r"\w", line) for line in document.header)
+    assert len(document.header) == 20
+    assert document.header[0] == "Rahul Kumar"
+    overflow = document.sections[0]
+    assert overflow.heading == "Additional Information"
+    assert "Profile detail 21" in overflow.items[0]
+    assert "linkedin.com/in/rahul51" in overflow.items[0]
+    assert document.sections[1].heading == "PROJECTS"
 
 
 def test_update_layout_preserves_draft_metadata_and_increments_revision(

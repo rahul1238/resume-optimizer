@@ -406,13 +406,24 @@ class ImprovementService:
             else:
                 header.append(line)
         add_section()
+        header = [line for line in header if re.search(r"\w", line)]
         if not sections and header:
             sections.append(
                 StructuredResumeSection(
                     section_id="section-resume",
                     heading="Resume",
-                    items=header[1:],
+                    items=["\n".join(header[1:])] if len(header) > 1 else [],
                 )
             )
             header = header[:1]
+        elif len(header) > 20:
+            sections.insert(
+                0,
+                StructuredResumeSection(
+                    section_id="section-additional-information",
+                    heading="Additional Information",
+                    items=["\n".join(header[20:])],
+                ),
+            )
+            header = header[:20]
         return StructuredResumeDocument(header=header, sections=sections)
