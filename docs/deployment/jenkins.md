@@ -3,10 +3,11 @@
 The root `Jenkinsfile` verifies every build. A successful build of `main` then
 deploys that exact commit to Render, waits for it to become live, rebuilds the
 web app with production browser configuration, and deploys it to Firebase
-Hosting. Other branches stop after CI and do not read deployment credentials.
+Hosting. The production guard fails the build before credentials are read when
+the checked-out commit does not exactly match `origin/main`.
 
-Jenkins itself is free; Docker Desktop performs the container builds and Docker
-Scout performs the vulnerability gate.
+Jenkins itself is free; Docker Desktop performs the container builds and the
+open-source Trivy container performs the vulnerability gate.
 
 ## Prerequisites
 
@@ -16,7 +17,6 @@ to the Jenkins service user:
 - `git`
 - Node.js 22 LTS and `npm`
 - `docker`, with Docker Desktop running
-- `docker scout`
 
 The pipeline adds the standard Apple Silicon Homebrew and `/usr/local/bin` paths.
 If a command is installed elsewhere, add that directory under **Manage Jenkins >
@@ -69,14 +69,18 @@ and removes the temporary copy after each build.
 The pipeline checks out a clean workspace, tests its deployment helper, runs all
 API tests in the same Tectonic-enabled Linux runtime used by production, lints
 and exports the web app, builds the production API image for Linux AMD64, and
-fails on critical or high Docker Scout findings. Placeholder public Firebase
-values are used only for the CI build.
+fails on critical or high Trivy findings. Placeholder public Firebase values
+are used only for the CI build.
 
-On `main`, Jenkins asks Render to deploy `GIT_COMMIT` and polls until the deploy
-is live. Only then does it build with `web-production-env` and authenticate the
-Firebase CLI through `GOOGLE_APPLICATION_CREDENTIALS`. Any API or Hosting
-failure fails the Jenkins build.
+Before deployment, Jenkins verifies that the checked-out Git commit exactly
+matches `origin/main`. It then asks Render to deploy that commit and polls until
+the deploy is live. Only then does it build with `web-production-env` and
+authenticate the Firebase CLI through `GOOGLE_APPLICATION_CREDENTIALS`. Any API
+or Hosting failure fails the Jenkins build.
 
-For automatic builds, configure a GitHub webhook after the Jenkins job works
-manually. Do not expose a Jenkins instance running on a personal machine directly
-to the public internet; that is a separate hardening step.
+The Jenkinsfile polls GitHub every five minutes and starts a build only when the
+configured SCM revision changes. Polling works without making local Jenkins
+publicly reachable. Jenkins and Docker Desktop must be running, and the machine
+must be awake, for a change to be detected and deployed. Do not expose a Jenkins
+instance running on a personal machine directly to the public internet; that is
+a separate hardening step.

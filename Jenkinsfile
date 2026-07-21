@@ -7,6 +7,10 @@ pipeline {
         timeout(time: 60, unit: 'MINUTES')
     }
 
+    triggers {
+        pollSCM('H/5 * * * *')
+    }
+
     environment {
         PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         API_TEST_IMAGE = "resume-optimizer-api:test-${env.BUILD_NUMBER}"
