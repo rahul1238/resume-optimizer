@@ -33,6 +33,8 @@ interface Props {
   resumeId: string;
 }
 
+type ReviewView = "roles" | "changes" | "questions" | "guidance";
+
 const ANALYSIS_ERRORS: Record<string, string> = {
   ai_provider_not_configured: "Resume analysis is not configured yet.",
   ai_provider_unavailable:
@@ -98,17 +100,18 @@ function LayoutNumber({
 interface BulletGroup {
   groupIndex: number;
   entryLabel: string;
+  entryMetadata: string;
   itemIndices: number[];
   bullets: string[];
 }
 
 function bulletGroups(items: string[]): BulletGroup[] {
   const groups: BulletGroup[] = [];
-  let entryLabel = "Entry";
+  let pendingHeader: string[] = [];
   let index = 0;
   while (index < items.length) {
     if (!/^\s*[-*•]\s+/.test(items[index])) {
-      entryLabel = items[index];
+      pendingHeader.push(items[index]);
       index += 1;
       continue;
     }
@@ -121,10 +124,12 @@ function bulletGroups(items: string[]): BulletGroup[] {
     }
     groups.push({
       groupIndex: groups.length,
-      entryLabel,
+      entryLabel: pendingHeader[0] ?? "Entry",
+      entryMetadata: pendingHeader.slice(1).join(" · "),
       itemIndices,
       bullets,
     });
+    pendingHeader = [];
   }
   return groups;
 }
@@ -219,6 +224,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     targetCount: number;
     mode: "prioritize" | "consolidate" | "expand";
   }>>({});
+  const [reviewView, setReviewView] = useState<ReviewView>("roles");
   const [draftView, setDraftView] = useState<"preview" | "edit">("preview");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -538,6 +544,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
       setImprovementSaved(true);
       setImprovementFeedback({});
       setDraftView("preview");
+      setReviewView("roles");
     } catch (caught: unknown) {
       setError(caught instanceof ApiClientError
         ? ANALYSIS_ERRORS[caught.code] ?? caught.message
@@ -1095,12 +1102,44 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                   </p>
                 </section>
               )}
+              <div className={styles.reviewTabs} role="tablist" aria-label="Improvement workflow">
+                {([
+                  ["roles", "Roles", improvement.result.structured_resume
+                    ? improvement.result.structured_resume.sections
+                      .filter((section) => {
+                        const heading = section.heading.toLowerCase();
+                        return heading.includes("experience") || heading.includes("project");
+                      })
+                      .flatMap((section) => bulletGroups(section.items)).length
+                    : 0],
+                  ["changes", "Changes", improvement.result.change_set.filter(
+                    (change) => change.status === "proposed",
+                  ).length],
+                  ["questions", "Questions", improvement.result.clarification_questions.length],
+                  ["guidance", "Guidance", improvement.result.ats_recommendations.length],
+                ] as const).map(([view, label, count]) => (
+                  <button
+                    key={view}
+                    type="button"
+                    role="tab"
+                    className={reviewView === view ? styles.reviewTabActive : ""}
+                    onClick={() => setReviewView(view)}
+                    aria-selected={reviewView === view}
+                  >
+                    <span>{label}</span>
+                    <strong>{count}</strong>
+                  </button>
+                ))}
+              </div>
+
+              {reviewView === "roles" && (
+                <>
               {improvement.result.structured_resume && (
                 <section className={styles.bulletControlBlock}>
                   <div className={styles.reviewHeading}>
                     <div>
-                      <h4>Bullet count</h4>
-                      <p>Create a proposal for one role or project at a time.</p>
+                      <h4>Roles and projects</h4>
+                      <p>Each entry stays separate. Adjust only its own bullet points.</p>
                     </div>
                   </div>
                   <div className={styles.bulletGroups}>
@@ -1126,6 +1165,11 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                             <div className={styles.bulletGroupHeader}>
                               <div>
                                 <strong>{group.entryLabel}</strong>
+                                {group.entryMetadata && (
+                                  <span className={styles.bulletEntryMetadata}>
+                                    {group.entryMetadata}
+                                  </span>
+                                )}
                                 <span>{group.bullets.length} current bullets</span>
                               </div>
                               <div className={styles.bulletControls}>
@@ -1277,7 +1321,11 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                   </div>
                 </section>
               )}
-              {improvement.result.clarification_questions.length > 0 && (
+                </>
+              )}
+
+              {reviewView === "questions" && (
+                improvement.result.clarification_questions.length > 0 ? (
                 <section className={styles.suggestionBlock}>
                   <div className={styles.reviewHeading}>
                     <div>
@@ -1332,9 +1380,13 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                     ))}
                   </div>
                 </section>
+                ) : (
+                  <p className={styles.reviewEmpty}>No experience confirmations are required.</p>
+                )
               )}
 
-              {improvement.result.change_set.length > 0 && (
+              {reviewView === "changes" && (
+                improvement.result.change_set.length > 0 ? (
                 <section className={styles.suggestionBlock}>
                   <div className={styles.reviewHeading}>
                     <div>
@@ -1402,13 +1454,18 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                     ))}
                   </div>
                 </section>
+                ) : (
+                  <p className={styles.reviewEmpty}>No proposed text changes are waiting for review.</p>
+                )
               )}
 
-              <div className={styles.improvementGrid}>
-                <ResultList title="ATS recommendations" items={improvement.result.ats_recommendations} />
-                <ResultList title="Skills to emphasize" items={improvement.result.skills_to_emphasize} />
-                <ResultList title="Integrity notes" items={improvement.result.integrity_notes} />
-              </div>
+              {reviewView === "guidance" && (
+                <div className={styles.improvementGrid}>
+                  <ResultList title="ATS recommendations" items={improvement.result.ats_recommendations} />
+                  <ResultList title="Skills to emphasize" items={improvement.result.skills_to_emphasize} />
+                  <ResultList title="Integrity notes" items={improvement.result.integrity_notes} />
+                </div>
+              )}
 
               <div className={styles.revisionActions}>
                 <label className={styles.feedbackField}>

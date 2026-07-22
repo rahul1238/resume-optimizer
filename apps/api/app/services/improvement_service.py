@@ -147,10 +147,11 @@ class ImprovementService:
         result: ResumeImprovementResult,
         source_text: str | None = None,
     ) -> ResumeImprovementResult:
-        draft = ImprovementService._preserve_projects(
+        draft = ImprovementService._preserve_employment_entries(
             result.optimized_resume_draft,
             source_text,
         )
+        draft = ImprovementService._preserve_projects(draft, source_text)
         document = ImprovementService._structure_draft(draft)
         changes = result.change_set or ImprovementService._legacy_changes(result)
         normalized_changes = []
@@ -197,6 +198,89 @@ class ImprovementService:
                 "tailoring_decisions": normalized_decisions,
             }
         )
+
+    @staticmethod
+    def _preserve_employment_entries(draft: str, source_text: str | None) -> str:
+        if not source_text or not draft.strip():
+            return draft
+
+        source = ImprovementService._structure_draft(source_text)
+        source_sections = [
+            section
+            for section in source.sections
+            if ImprovementService._is_experience_heading(section.heading)
+        ]
+        source_blocks = [
+            block
+            for section in source_sections
+            for block in ImprovementService._entry_blocks(section.items)
+            if block
+        ]
+        if not source_blocks:
+            return draft
+
+        document = ImprovementService._structure_draft(draft)
+        target_indices = [
+            index
+            for index, section in enumerate(document.sections)
+            if ImprovementService._is_experience_heading(section.heading)
+        ]
+        if not target_indices:
+            document.sections.extend(
+                section.model_copy(deep=True) for section in source_sections
+            )
+            return ImprovementService._serialize_document(document)
+
+        target_index = target_indices[0]
+        target_blocks = ImprovementService._entry_blocks(
+            document.sections[target_index].items
+        )
+        matched_targets: dict[int, list[str]] = {}
+        ambiguous_sources: set[int] = set()
+        for target_block in target_blocks:
+            matches = [
+                index
+                for index, source_block in enumerate(source_blocks)
+                if ImprovementService._entry_matches(source_block, target_block)
+            ]
+            if len(matches) != 1:
+                continue
+            source_index = matches[0]
+            if source_index in matched_targets:
+                ambiguous_sources.add(source_index)
+                continue
+            matched_targets[source_index] = target_block
+
+        preserved_items: list[str] = []
+        for source_index, source_block in enumerate(source_blocks):
+            target_block = matched_targets.get(source_index)
+            if target_block is None or source_index in ambiguous_sources:
+                preserved_items.extend(source_block)
+                continue
+            target_bullets = [
+                item for item in target_block if ImprovementService._is_bullet(item)
+            ]
+            if not target_bullets:
+                preserved_items.extend(source_block)
+                continue
+            preserved_items.extend(
+                [
+                    *ImprovementService._entry_header(source_block),
+                    *target_bullets,
+                ]
+            )
+
+        target = document.sections[target_index]
+        document.sections[target_index] = target.model_copy(
+            update={"items": preserved_items}
+        )
+        document.sections = [
+            section
+            for index, section in enumerate(document.sections)
+            if index == target_index
+            or not ImprovementService._is_experience_heading(section.heading)
+        ]
+        return ImprovementService._serialize_document(document)
 
     @staticmethod
     def _preserve_projects(draft: str, source_text: str | None) -> str:
@@ -265,12 +349,44 @@ class ImprovementService:
         }
 
     @staticmethod
-    def _project_blocks(items: list[str]) -> list[list[str]]:
+    def _is_experience_heading(heading: str) -> bool:
+        normalized = re.sub(r"[^a-z]+", " ", heading.lower()).strip()
+        return normalized in {
+            "experience",
+            "employment history",
+            "professional experience",
+            "work experience",
+        }
+
+    @staticmethod
+    def _is_bullet(item: str) -> bool:
+        return bool(re.match(r"^\s*[-*\u2022]\s+", item))
+
+    @staticmethod
+    def _entry_header(block: list[str]) -> list[str]:
+        return [item for item in block if not ImprovementService._is_bullet(item)]
+
+    @staticmethod
+    def _entry_matches(source_block: list[str], target_block: list[str]) -> bool:
+        source_header = ImprovementService._entry_header(source_block)
+        target_header = ImprovementService._entry_header(target_block)
+        if not source_header or not target_header:
+            return False
+        source_label = re.sub(r"[^a-z0-9]+", " ", source_header[0].lower()).strip()
+        target_label = re.sub(
+            r"[^a-z0-9]+",
+            " ",
+            " ".join(target_header).lower(),
+        ).strip()
+        return bool(source_label and source_label in target_label)
+
+    @staticmethod
+    def _entry_blocks(items: list[str]) -> list[list[str]]:
         blocks: list[list[str]] = []
         current: list[str] = []
         has_bullet = False
         for item in items:
-            is_bullet = bool(re.match(r"^\s*[-*\u2022]\s+", item))
+            is_bullet = ImprovementService._is_bullet(item)
             if current and has_bullet and not is_bullet:
                 blocks.append(current)
                 current = []
@@ -280,6 +396,10 @@ class ImprovementService:
         if current:
             blocks.append(current)
         return blocks
+
+    @staticmethod
+    def _project_blocks(items: list[str]) -> list[list[str]]:
+        return ImprovementService._entry_blocks(items)
 
     @staticmethod
     def _project_title_key(title: str) -> str:

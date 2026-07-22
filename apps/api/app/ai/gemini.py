@@ -169,7 +169,10 @@ keyword-stuff or retain unrelated skills merely because space is available.
 Preserve every employer, role, and date range so tailoring cannot create employment
 gaps. An irrelevant role may be condensed, but never removed. Prefer the strongest
 three to six relevant bullets for a recent role and fewer for older or less relevant
-roles. Keep the master resume unchanged; omissions apply only to this tailored draft.
+roles. Keep every employment entry separate, in the same order as the master resume.
+Copy each role, employer, location, and date header exactly; never merge two roles or
+move a bullet from one role into another. Keep the master resume unchanged; omissions
+apply only to this tailored draft.
 Populate tailoring_decisions for selected and omitted skills, projects, experience
 bullets, and employment entries. Identify whether each item serves a required,
 recommended, supporting, or irrelevant requirement, and cite the matched job

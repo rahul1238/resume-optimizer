@@ -679,6 +679,12 @@
   font-size: 0.66rem;
 }
 
+.bulletGroupHeader .bulletEntryMetadata {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bulletControls {
   display: flex;
   flex: 0 0 auto;
@@ -764,6 +770,69 @@
 .improvementBody {
   display: flex;
   flex-direction: column;
+}
+
+.reviewTabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  padding: 8px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-2);
+}
+
+.reviewTabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-faint);
+  background: transparent;
+  font: inherit;
+  font-size: 0.69rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.reviewTabs button:hover {
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+}
+
+.reviewTabs .reviewTabActive {
+  color: var(--color-text);
+  background: var(--color-surface-2);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.reviewTabs strong {
+  min-width: 18px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-faint);
+  background: var(--color-bg);
+  font-size: 0.62rem;
+  text-align: center;
+}
+
+.reviewEmpty {
+  padding: 28px 20px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-faint);
+  font-size: 0.76rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .reviewTabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .coverageBar {

@@ -66,9 +66,7 @@ class BulletOptimizationService:
             )
         groups = cls.groups(section.items)
         if group_index < 0 or group_index >= len(groups):
-            raise BulletOptimizationError(
-                "The selected bullet group no longer exists."
-            )
+            raise BulletOptimizationError("The selected bullet group no longer exists.")
         entry_label, item_indices, source_bullets = groups[group_index]
         if target_count == len(source_bullets):
             raise BulletOptimizationError(
@@ -136,13 +134,14 @@ class BulletOptimizationService:
     @classmethod
     def groups(cls, items: list[str]) -> list[tuple[str, list[int], list[str]]]:
         groups: list[tuple[str, list[int], list[str]]] = []
-        label = "Entry"
+        pending_header: list[str] = []
         index = 0
         while index < len(items):
             if not cls.bullet_pattern.match(items[index]):
-                label = items[index]
+                pending_header.append(items[index])
                 index += 1
                 continue
+            label = pending_header[0] if pending_header else "Entry"
             indices: list[int] = []
             bullets: list[str] = []
             while index < len(items) and cls.bullet_pattern.match(items[index]):
@@ -150,6 +149,7 @@ class BulletOptimizationService:
                 bullets.append(items[index])
                 index += 1
             groups.append((label, indices, bullets))
+            pending_header = []
         return groups
 
     @staticmethod

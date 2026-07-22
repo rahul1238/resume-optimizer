@@ -164,6 +164,91 @@ def test_normalize_restores_projects_missing_from_generated_draft() -> None:
     )
 
 
+def test_normalize_rejects_merged_employment_entries() -> None:
+    source = (
+        "Rahul Kumar\n\n"
+        "EXPERIENCE\n"
+        "Junior Support Engineer | Alpha Ltd\n"
+        "Jan 2023 - Dec 2023\n"
+        "- Resolved customer incidents.\n"
+        "- Documented support procedures.\n"
+        "Software Engineer Intern | Beta Labs\n"
+        "Jun 2022 - Dec 2022\n"
+        "- Built Python API endpoints.\n"
+        "- Added automated tests.\n\n"
+        "EDUCATION\nB.Tech in Computer Science"
+    )
+    result = legacy_result().model_copy(
+        update={
+            "optimized_resume_draft": (
+                "Rahul Kumar\n\n"
+                "EXPERIENCE\n"
+                "Junior Support Engineer / Software Engineer Intern | Alpha and Beta\n"
+                "Jan 2023 - Dec 2023 / Jun 2022 - Dec 2022\n"
+                "- Combined support work with Python development.\n\n"
+                "EDUCATION\nB.Tech in Computer Science"
+            )
+        }
+    )
+
+    normalized = ImprovementService.normalize(result, source)
+
+    assert "Junior Support Engineer / Software Engineer Intern" not in (
+        normalized.optimized_resume_draft
+    )
+    assert "Junior Support Engineer | Alpha Ltd" in normalized.optimized_resume_draft
+    assert "Software Engineer Intern | Beta Labs" in normalized.optimized_resume_draft
+    assert "- Resolved customer incidents." in normalized.optimized_resume_draft
+    assert "- Built Python API endpoints." in normalized.optimized_resume_draft
+
+
+def test_normalize_keeps_generated_bullets_with_their_original_role() -> None:
+    source = (
+        "Rahul Kumar\n\n"
+        "WORK EXPERIENCE\n"
+        "Junior Support Engineer | Alpha Ltd\n"
+        "Jan 2023 - Dec 2023\n"
+        "- Resolved customer incidents.\n"
+        "Software Engineer Intern | Beta Labs\n"
+        "Jun 2022 - Dec 2022\n"
+        "- Built Python API endpoints."
+    )
+    result = legacy_result().model_copy(
+        update={
+            "optimized_resume_draft": (
+                "Rahul Kumar\n\n"
+                "WORK EXPERIENCE\n"
+                "Junior Support Engineer | Alpha Ltd\n"
+                "2023\n"
+                "- Resolved priority incidents and documented resolutions.\n"
+                "Software Engineer Intern | Beta Labs\n"
+                "2022\n"
+                "- Built tested Python API endpoints."
+            )
+        }
+    )
+
+    normalized = ImprovementService.normalize(result, source)
+    document = normalized.structured_resume
+
+    assert document is not None
+    experience = next(
+        section for section in document.sections if section.heading == "WORK EXPERIENCE"
+    )
+    groups = ImprovementService._entry_blocks(experience.items)
+    assert len(groups) == 2
+    assert groups[0][:2] == [
+        "Junior Support Engineer | Alpha Ltd",
+        "Jan 2023 - Dec 2023",
+    ]
+    assert groups[0][2] == ("- Resolved priority incidents and documented resolutions.")
+    assert groups[1][:2] == [
+        "Software Engineer Intern | Beta Labs",
+        "Jun 2022 - Dec 2022",
+    ]
+    assert groups[1][2] == "- Built tested Python API endpoints."
+
+
 def test_structure_draft_ignores_pdf_header_separators_and_preserves_overflow() -> None:
     meaningful_header = [f"Profile detail {index}" for index in range(22)]
     draft = "\n".join(

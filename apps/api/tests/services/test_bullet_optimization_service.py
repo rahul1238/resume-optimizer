@@ -134,3 +134,24 @@ def test_groups_do_not_mix_bullets_between_entries() -> None:
     assert len(groups) == 2
     assert groups[0][1] == [1, 2, 3]
     assert groups[1][1] == [5]
+
+
+def test_groups_use_role_line_when_entry_has_separate_metadata() -> None:
+    groups = BulletOptimizationService.groups(
+        [
+            "Junior Support Engineer | Alpha Ltd",
+            "Jan 2023 - Dec 2023",
+            "Remote",
+            "- Resolved customer incidents.",
+            "Software Engineer Intern | Beta Labs",
+            "Jun 2022 - Dec 2022",
+            "- Built Python API endpoints.",
+        ]
+    )
+
+    assert [group[0] for group in groups] == [
+        "Junior Support Engineer | Alpha Ltd",
+        "Software Engineer Intern | Beta Labs",
+    ]
+    assert groups[0][1] == [3]
+    assert groups[1][1] == [6]
