@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
@@ -243,10 +244,7 @@ async def propose_bullet_optimization(
         request.target_count,
         request.mode,
     )
-    return BulletOptimizationResponse(
-        **proposal.__dict__,
-        can_apply=proposal.can_apply,
-    )
+    return BulletOptimizationResponse(**asdict(proposal), can_apply=proposal.can_apply)
 
 
 @router.get("/{analysis_id}/export/pdf")

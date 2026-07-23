@@ -14,6 +14,7 @@ from app.services.analysis_service import AnalysisService
 from app.services.bullet_optimization_service import (
     BulletOptimizationProposal,
     BulletOptimizationService,
+    SkillIntegrationProposal,
 )
 from app.services.export_service import ResumeExportService
 from app.services.improvement_service import ImprovementService
@@ -240,6 +241,15 @@ def test_bullet_optimization_returns_reviewable_proposal(
         protected_keywords=["Python"],
         lost_keywords=[],
         rationale="Consolidates overlapping evidence.",
+        skill_integrations=[
+            SkillIntegrationProposal(
+                suggestion_id="suggestion-id",
+                bullet_index=0,
+                skills=["Python"],
+                suggested_bullet="- Built and tested reliable Python APIs.",
+                reason="Confirm Python was used for these APIs.",
+            )
+        ],
     )
     monkeypatch.setattr(BulletOptimizationService, "propose", lambda *_args: proposal)
 
@@ -256,6 +266,15 @@ def test_bullet_optimization_returns_reviewable_proposal(
     assert response.status_code == 200
     assert response.json()["can_apply"] is True
     assert response.json()["item_indices"] == [1, 2, 3]
+    assert response.json()["skill_integrations"] == [
+        {
+            "suggestion_id": "suggestion-id",
+            "bullet_index": 0,
+            "skills": ["Python"],
+            "suggested_bullet": "- Built and tested reliable Python APIs.",
+            "reason": "Confirm Python was used for these APIs.",
+        }
+    ]
 
 
 def test_pdf_preview_renders_unsaved_draft(
