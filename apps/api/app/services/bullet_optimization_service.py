@@ -48,6 +48,15 @@ class BulletOptimizationProposal:
 
 class BulletOptimizationService:
     bullet_pattern = re.compile(r"^\s*[-*•]\s+")
+    metric_pattern = re.compile(
+        r"(?<![\w])\d[\d,]*(?:\.\d+)?"
+        r"(?:\s*[-–—]\s*\d[\d,]*(?:\.\d+)?)?"
+        r"\s*(?:%|[KMBkmb]\+?|\+)?"
+    )
+    named_term_pattern = re.compile(
+        r"\b(?:[A-Z]{2,}[A-Za-z0-9]*|[A-Z][a-z]+[A-Z][A-Za-z0-9]*"
+        r"|[A-Z][a-z]{2,})\b"
+    )
 
     @classmethod
     def propose(
@@ -124,7 +133,21 @@ class BulletOptimizationService:
                     "The bullet service returned invalid evidence links."
                 )
 
-        proposed_bullets = [f"- {bullet.text.strip()}" for bullet in optimized.bullets]
+        proposed_bullets: list[str] = []
+        preserved_original = False
+        for index, bullet in enumerate(optimized.bullets):
+            proposed = f"- {bullet.text.strip()}"
+            if mode == "rewrite" and (
+                bullet.source_indices != [index]
+                or not cls._rewrite_preserves_evidence(
+                    source_bullets[index],
+                    proposed,
+                    candidate_skills,
+                )
+            ):
+                proposed = cls._format_bullet(source_bullets[index])
+                preserved_original = True
+            proposed_bullets.append(proposed)
         proposed_text = "\n".join(proposed_bullets)
         normalized_proposal = AnalysisService._normalize_match_text(proposed_text)
         lost_keywords = [
@@ -147,6 +170,12 @@ class BulletOptimizationService:
                 if skill.casefold() in verified_skills
             ]
             if not skills:
+                continue
+            evidence_text = " ".join(
+                source_bullets[index]
+                for index in optimized.bullets[suggestion.bullet_index].source_indices
+            )
+            if all(cls._contains_skill(evidence_text, skill) for skill in skills):
                 continue
             seen_bullet_indices.add(suggestion.bullet_index)
             skill_integrations.append(
@@ -171,8 +200,73 @@ class BulletOptimizationService:
             protected_keywords=protected_keywords,
             lost_keywords=lost_keywords,
             skill_integrations=skill_integrations,
-            rationale=optimized.rationale,
+            rationale=(
+                f"{optimized.rationale} Some bullets were kept unchanged because "
+                "the rewrite did not preserve their source facts exactly."
+                if preserved_original
+                else optimized.rationale
+            ),
         )
+
+    @classmethod
+    def _rewrite_preserves_evidence(
+        cls,
+        source: str,
+        proposed: str,
+        candidate_skills: list[str],
+    ) -> bool:
+        source_metrics = {
+            cls._normalize_evidence(item)
+            for item in cls.metric_pattern.findall(source)
+            if item.strip()
+        }
+        proposed_metrics = {
+            cls._normalize_evidence(item)
+            for item in cls.metric_pattern.findall(proposed)
+            if item.strip()
+        }
+        if not source_metrics.issubset(proposed_metrics):
+            return False
+
+        named_terms = cls.named_term_pattern.findall(
+            cls.bullet_pattern.sub("", source, count=1)
+        )
+        if named_terms:
+            named_terms = named_terms[1:]
+        normalized_proposal = AnalysisService._normalize_match_text(proposed)
+        if any(
+            not AnalysisService._contains_keyword(normalized_proposal, term)
+            for term in named_terms
+        ):
+            return False
+
+        return all(
+            not cls._contains_skill(source, skill)
+            or cls._contains_skill(proposed, skill)
+            for skill in candidate_skills
+        )
+
+    @staticmethod
+    def _normalize_evidence(value: str) -> str:
+        return re.sub(r"\s+", "", value).replace("–", "-").replace("—", "-").casefold()
+
+    @classmethod
+    def _contains_skill(cls, text: str, skill: str) -> bool:
+        normalized_text = AnalysisService._normalize_match_text(text)
+        aliases = {skill}
+        words = re.findall(r"[A-Za-z0-9]+", skill)
+        if len(words) > 1:
+            acronym = "".join(word[0] for word in words if word).upper()
+            if len(acronym) >= 2:
+                aliases.add(acronym)
+        return any(
+            AnalysisService._contains_keyword(normalized_text, alias)
+            for alias in aliases
+        )
+
+    @classmethod
+    def _format_bullet(cls, value: str) -> str:
+        return f"- {cls.bullet_pattern.sub('', value, count=1).strip()}"
 
     @staticmethod
     def _candidate_skills(document) -> list[str]:

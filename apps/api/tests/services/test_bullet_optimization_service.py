@@ -200,6 +200,108 @@ def test_rewrite_keeps_count_and_surfaces_confirmed_skill_candidates(
     assert proposal.can_apply is True
 
 
+def test_rewrite_keeps_original_when_ai_changes_source_evidence(monkeypatch) -> None:
+    configure(
+        monkeypatch,
+        BulletOptimizationResult(
+            bullets=[
+                OptimizedBullet(
+                    text="Built scalable APIs for customers.",
+                    source_indices=[0],
+                ),
+                OptimizedBullet(
+                    text="Improved API reliability through testing.",
+                    source_indices=[1],
+                ),
+                OptimizedBullet(
+                    text="Reduced deployment time by 40 percent.",
+                    source_indices=[2],
+                ),
+            ],
+            rationale="Rewrites each bullet for the role.",
+        ),
+    )
+
+    proposal = BulletOptimizationService.propose(
+        "user-id",
+        "analysis-id",
+        "section-experience",
+        0,
+        3,
+        "rewrite",
+    )
+
+    assert proposal.proposed_bullets[0] == "- Built Python and FastAPI services."
+    assert proposal.proposed_bullets[2] == "- Reduced deployment time by 40%."
+    assert "kept unchanged" in proposal.rationale
+
+
+def test_rewrite_does_not_request_confirmation_for_source_backed_skill(
+    monkeypatch,
+) -> None:
+    configure(
+        monkeypatch,
+        BulletOptimizationResult(
+            bullets=[
+                OptimizedBullet(
+                    text="Built Python and FastAPI services.",
+                    source_indices=[0],
+                ),
+                OptimizedBullet(
+                    text="Improved API reliability through testing.",
+                    source_indices=[1],
+                ),
+                OptimizedBullet(
+                    text="Reduced deployment time by 40%.",
+                    source_indices=[2],
+                ),
+            ],
+            skill_integrations=[
+                SkillIntegrationSuggestion(
+                    bullet_index=0,
+                    skills=["Python"],
+                    suggested_text="Built Python services with FastAPI.",
+                    reason="Confirm Python usage.",
+                )
+            ],
+            rationale="Rewrites each bullet for the role.",
+        ),
+    )
+
+    proposal = BulletOptimizationService.propose(
+        "user-id",
+        "analysis-id",
+        "section-experience",
+        0,
+        3,
+        "rewrite",
+    )
+
+    assert proposal.skill_integrations == []
+
+
+def test_rewrite_fidelity_rejects_rounded_metrics_and_ranges() -> None:
+    source = (
+        "- Supported 350K+ users, reducing duplicate accounts by 5-6% and "
+        "turnaround time from 2-3 business days to 2-3 hours."
+    )
+    proposed = (
+        "- Supported 350,000 users, reducing duplicate accounts by 6% and "
+        "turnaround time from days to hours."
+    )
+
+    assert BulletOptimizationService._rewrite_preserves_evidence(
+        source,
+        proposed,
+        [],
+    ) is False
+    assert BulletOptimizationService._rewrite_preserves_evidence(
+        source,
+        source,
+        [],
+    ) is True
+
+
 def test_groups_do_not_mix_bullets_between_entries() -> None:
     section = tailored_result().structured_resume.sections[0]
 

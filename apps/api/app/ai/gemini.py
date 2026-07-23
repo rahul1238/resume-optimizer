@@ -257,7 +257,10 @@ bullet must cite one or more zero-based source indices. The mode is {mode}:
 - rewrite: keep the same number of bullets and rewrite each achievement for the
   job description and ATS clarity. Use strong action verbs, natural job keywords,
   and concise outcome-first language. Add a job keyword directly only when the
-  source bullet already supports it.
+  source bullet already supports it. Output bullet N must cite only source index N.
+  Preserve every numeric expression, proper noun, technology, system name, scope
+  list, and factual clause from that source bullet. Keep numeric expressions
+  verbatim; never round, expand, narrow, or summarize a range.
 Preserve these currently supported job keywords when they remain truthful:
 {", ".join(protected_keywords) or "None"}
 Candidate-wide verified skills:
