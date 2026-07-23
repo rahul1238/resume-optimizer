@@ -71,6 +71,42 @@ def test_latex_source_uses_selected_ats_layout() -> None:
     assert r"\fontsize{11.0}{14.30}\selectfont" in source
 
 
+def test_experience_renderer_keeps_role_metadata_and_bullets_together() -> None:
+    draft = """Rahul Kumar
+rahul@example.com
+
+PROFESSIONAL EXPERIENCE
+Junior Support Engineer | GoApptiv
+07/2024
+present
+Hyderabad, India
+- Built backend microservices.
+- Improved distributed synchronization.
+Software Engineer Intern | GoApptiv
+12/2023
+06/2024
+Hyderabad
+- Optimized SQL queries.
+"""
+
+    source = ResumeExportService._latex_source(
+        ResumeExportService.structure(draft),
+        ResumeLayoutSettings(),
+    )
+
+    assert r"\textbf{Junior Support Engineer | GoApptiv}\par" in source
+    assert "07/2024 | present | Hyderabad, India" in source
+    assert r"\item Built backend microservices." in source
+    assert r"\textbf{Software Engineer Intern | GoApptiv}\par" in source
+    assert "12/2023 | 06/2024 | Hyderabad" in source
+    assert source.index("Built backend microservices") < source.index(
+        "Software Engineer Intern"
+    )
+    assert source.index("Optimized SQL queries") > source.index(
+        "Software Engineer Intern"
+    )
+
+
 @pytest.mark.parametrize("template", ["classic", "compact", "technical"])
 def test_pdf_templates_are_text_parseable_and_preserve_links(template) -> None:
     pdf = ResumeExportService.to_pdf(

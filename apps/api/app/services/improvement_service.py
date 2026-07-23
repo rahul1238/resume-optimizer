@@ -4,6 +4,8 @@ import hashlib
 import re
 from datetime import UTC, datetime
 
+from google.auth.exceptions import DefaultCredentialsError
+
 from app.ai.factory import get_ai_provider
 from app.ai.schemas import (
     ClarificationQuestion,
@@ -20,8 +22,15 @@ from app.repositories.improvement_repository import (
     ImprovementNotFoundError,
     ImprovementRepository,
 )
-from app.repositories.resume_repository import ResumeRepository
-from app.services.resume_storage_service import ResumeStorageService
+from app.repositories.resume_repository import ResumeRepository, ResumeRepositoryError
+from app.services.employment_structure import (
+    EmploymentEntry,
+    bullet_evidence_score,
+    deduplicate_bullets,
+    entry_similarity,
+    parse_employment_entries,
+)
+from app.services.resume_storage_service import ResumeStorageError, ResumeStorageService
 
 
 class ImprovementService:
@@ -93,9 +102,20 @@ class ImprovementService:
 
     @staticmethod
     def result(record: ImprovementRecord) -> ResumeImprovementResult:
-        return ImprovementService.normalize(
-            ResumeImprovementResult.model_validate(record.result)
-        )
+        result = ResumeImprovementResult.model_validate(record.result)
+        document = result.structured_resume
+        if document is None or document.schema_version >= 2:
+            return ImprovementService.normalize(result)
+        try:
+            resume = ResumeRepository.get_owned(record.resume_id, record.owner_uid)
+            source_text = ResumeStorageService.read_text(resume.text_storage_path)
+        except (
+            DefaultCredentialsError,
+            ResumeRepositoryError,
+            ResumeStorageError,
+        ):
+            source_text = None
+        return ImprovementService.normalize(result, source_text)
 
     @staticmethod
     def save(
@@ -152,7 +172,9 @@ class ImprovementService:
             source_text,
         )
         draft = ImprovementService._preserve_projects(draft, source_text)
-        document = ImprovementService._structure_draft(draft)
+        document = ImprovementService._structure_draft(draft).model_copy(
+            update={"schema_version": 2}
+        )
         changes = result.change_set or ImprovementService._legacy_changes(result)
         normalized_changes = []
         for change in changes:
@@ -210,13 +232,13 @@ class ImprovementService:
             for section in source.sections
             if ImprovementService._is_experience_heading(section.heading)
         ]
-        source_blocks = [
-            block
+        source_entries = [
+            entry
             for section in source_sections
-            for block in ImprovementService._entry_blocks(section.items)
-            if block
+            for entry in parse_employment_entries(section.items)
+            if entry.header
         ]
-        if not source_blocks:
+        if not source_entries:
             return draft
 
         document = ImprovementService._structure_draft(draft)
@@ -232,42 +254,52 @@ class ImprovementService:
             return ImprovementService._serialize_document(document)
 
         target_index = target_indices[0]
-        target_blocks = ImprovementService._entry_blocks(
+        target_entries = parse_employment_entries(
             document.sections[target_index].items
         )
-        matched_targets: dict[int, list[str]] = {}
-        ambiguous_sources: set[int] = set()
-        for target_block in target_blocks:
-            matches = [
-                index
-                for index, source_block in enumerate(source_blocks)
-                if ImprovementService._entry_matches(source_block, target_block)
-            ]
-            if len(matches) != 1:
+        matched_source_indices: set[int] = set()
+        target_assignments: list[tuple[int, EmploymentEntry]] = []
+        for target_entry in target_entries:
+            ranked = sorted(
+                (
+                    (entry_similarity(source_entry, target_entry), source_index)
+                    for source_index, source_entry in enumerate(source_entries)
+                ),
+                reverse=True,
+            )
+            if not ranked or ranked[0][0] < 0.3:
                 continue
-            source_index = matches[0]
-            if source_index in matched_targets:
-                ambiguous_sources.add(source_index)
+            if len(ranked) > 1 and ranked[1][0] >= 0.3:
+                # A header matching multiple source roles is a merged entry.
                 continue
-            matched_targets[source_index] = target_block
+            source_index = ranked[0][1]
+            if source_index not in matched_source_indices:
+                matched_source_indices.add(source_index)
+                target_assignments.append((source_index, target_entry))
+
+        assigned_bullets: dict[int, list[str]] = {
+            index: [] for index in range(len(source_entries))
+        }
+        for source_index, target_entry in target_assignments:
+            for bullet in target_entry.bullets:
+                scores = [
+                    bullet_evidence_score(bullet, source_entry)
+                    for source_entry in source_entries
+                ]
+                if not scores:
+                    continue
+                best_index = max(range(len(scores)), key=scores.__getitem__)
+                if best_index == source_index and scores[best_index] >= 0.24:
+                    assigned_bullets[source_index].append(bullet)
 
         preserved_items: list[str] = []
-        for source_index, source_block in enumerate(source_blocks):
-            target_block = matched_targets.get(source_index)
-            if target_block is None or source_index in ambiguous_sources:
-                preserved_items.extend(source_block)
-                continue
-            target_bullets = [
-                item for item in target_block if ImprovementService._is_bullet(item)
-            ]
-            if not target_bullets:
-                preserved_items.extend(source_block)
-                continue
+        for source_index, source_entry in enumerate(source_entries):
+            target_bullets = deduplicate_bullets(assigned_bullets[source_index])
             preserved_items.extend(
-                [
-                    *ImprovementService._entry_header(source_block),
-                    *target_bullets,
-                ]
+                EmploymentEntry(
+                    header=source_entry.header,
+                    bullets=target_bullets or source_entry.bullets,
+                ).items
             )
 
         target = document.sections[target_index]

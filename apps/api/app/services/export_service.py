@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.models.layout import ResumeLayoutSettings
 from app.parsers.resume_parser import ResumeParser
 from app.repositories.resume_repository import ResumeRepository
+from app.services.employment_structure import parse_employment_entries
 from app.services.improvement_service import ImprovementService
 from app.services.resume_storage_service import ResumeStorageService
 
@@ -374,6 +375,19 @@ class ResumeExportService:
 
     @classmethod
     def _latex_section(cls, section: ResumeSection) -> str:
+        normalized_heading = re.sub(
+            r"[^a-z]+",
+            " ",
+            section.heading.casefold(),
+        ).strip()
+        if normalized_heading in {
+            "experience",
+            "employment history",
+            "professional experience",
+            "work experience",
+        }:
+            return cls._latex_experience_section(section)
+
         output = [rf"\section*{{{cls._latex_escape(section.heading)}}}"]
         in_list = False
         for index, line in enumerate(section.lines):
@@ -397,6 +411,25 @@ class ResumeExportService:
                 output.append(rf"{value}\par")
         if in_list:
             output.append(r"\end{itemize}")
+        return "\n".join(output)
+
+    @classmethod
+    def _latex_experience_section(cls, section: ResumeSection) -> str:
+        output = [rf"\section*{{{cls._latex_escape(section.heading)}}}"]
+        entries = parse_employment_entries(section.lines)
+        if not entries:
+            return "\n".join(output)
+        for entry in entries:
+            output.append(rf"\textbf{{{cls._latex_text(entry.label)}}}\par")
+            metadata = " | ".join(entry.header[1:])
+            if metadata:
+                output.append(rf"{cls._latex_text(metadata)}\par")
+            if entry.bullets:
+                output.append(r"\begin{itemize}")
+                output.extend(
+                    rf"\item {cls._latex_text(bullet)}" for bullet in entry.bullets
+                )
+                output.append(r"\end{itemize}")
         return "\n".join(output)
 
     @classmethod

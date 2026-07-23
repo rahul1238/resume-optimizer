@@ -1,5 +1,6 @@
 import re
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from app.ai.schemas import (
     BulletRewrite,
@@ -10,7 +11,9 @@ from app.ai.schemas import (
 from app.models.improvement import ImprovementRecord
 from app.models.layout import ResumeLayoutSettings
 from app.repositories.improvement_repository import ImprovementRepository
+from app.repositories.resume_repository import ResumeRepository
 from app.services.improvement_service import ImprovementService
+from app.services.resume_storage_service import ResumeStorageService
 
 
 def legacy_result() -> ResumeImprovementResult:
@@ -247,6 +250,125 @@ def test_normalize_keeps_generated_bullets_with_their_original_role() -> None:
         "Jun 2022 - Dec 2022",
     ]
     assert groups[1][2] == "- Built tested Python API endpoints."
+
+
+def test_normalize_repairs_bulletless_pdf_experience_without_moving_bullets() -> None:
+    source = (
+        "Rahul Kumar\n\n"
+        "PROFESSIONAL EXPERIENCE\n"
+        "Junior Support Engineer – GoApptiv Private Limited\n"
+        "07/2024\n"
+        "present\n"
+        "Hyderabad, India\n"
+        "Designed scalable Node.js and NestJS microservices serving 350K+ users.\n"
+        "Engineered Google Pub/Sub synchronization across 3 platforms.\n"
+        "Software Engineer Intern – GoApptiv Private Limited\n"
+        "12/2023\n"
+        "06/2024\n"
+        "Hyderabad\n"
+        "Enhanced SQL query performance, reducing API response times by 20-30%.\n"
+        "Automated onboarding workflows using Python scripts."
+    )
+    result = legacy_result().model_copy(
+        update={
+            "optimized_resume_draft": (
+                "Rahul Kumar\n\n"
+                "PROFESSIONAL EXPERIENCE\n"
+                "Junior Support Engineer – GoApptiv Private Limited\n"
+                "07/2024\n"
+                "present\n"
+                "Hyderabad, India\n"
+                "Designed production-grade Node.js and NestJS microservices serving "
+                "350K+ users.\n"
+                "Engineered Google Pub/Sub synchronization across 3 platforms.\n"
+                "Software Engineer Intern – GoApptiv Private Limited\n"
+                "12/2023\n"
+                "06/2024\n"
+                "Hyderabad\n"
+                "Enhanced SQL query performance, reducing API response times by "
+                "20-30%.\n"
+                "Automated onboarding workflows using Python scripts.\n"
+                "- Designed scalable Node.js and NestJS microservices serving 350K+ "
+                "users.\n"
+                "- Engineered Google Pub/Sub synchronization across 3 platforms."
+            )
+        }
+    )
+
+    normalized = ImprovementService.normalize(result, source)
+    document = normalized.structured_resume
+
+    assert document is not None
+    experience = next(
+        section
+        for section in document.sections
+        if section.heading == "PROFESSIONAL EXPERIENCE"
+    )
+    groups = ImprovementService._entry_blocks(experience.items)
+    assert len(groups) == 2
+    assert groups[0][0] == "Junior Support Engineer – GoApptiv Private Limited"
+    assert groups[1][0] == "Software Engineer Intern – GoApptiv Private Limited"
+    assert sum("Designed production-grade Node.js" in item for item in groups[0]) == 1
+    assert not any("Designed production-grade Node.js" in item for item in groups[1])
+    assert any("Enhanced SQL query performance" in item for item in groups[1])
+    assert any("Automated onboarding workflows" in item for item in groups[1])
+
+
+def test_result_migrates_saved_v1_draft_from_immutable_source(monkeypatch) -> None:
+    source = (
+        "Rahul Kumar\n\n"
+        "EXPERIENCE\n"
+        "Support Engineer | Alpha Ltd\n"
+        "2024 - present\n"
+        "- Resolved production incidents.\n"
+        "Software Engineer Intern | Alpha Ltd\n"
+        "2023 - 2024\n"
+        "- Built Python APIs."
+    )
+    corrupt = legacy_result().model_copy(
+        update={
+            "optimized_resume_draft": (
+                "Rahul Kumar\n\n"
+                "EXPERIENCE\n"
+                "Support Engineer / Software Engineer Intern | Alpha Ltd\n"
+                "2023 - present\n"
+                "- Combined all responsibilities."
+            )
+        }
+    )
+    corrupt = corrupt.model_copy(
+        update={
+            "structured_resume": ImprovementService._structure_draft(
+                corrupt.optimized_resume_draft
+            )
+        }
+    )
+    record = ImprovementRecord(
+        analysis_id="analysis-id",
+        owner_uid="user-id",
+        resume_id="resume-id",
+        provider="gemini",
+        model="gemini",
+        result=corrupt.model_dump(),
+    )
+    monkeypatch.setattr(
+        ResumeRepository,
+        "get_owned",
+        lambda *_args: SimpleNamespace(text_storage_path="resume/source.txt"),
+    )
+    monkeypatch.setattr(ResumeStorageService, "read_text", lambda *_args: source)
+
+    migrated = ImprovementService.result(record)
+
+    assert migrated.structured_resume is not None
+    assert migrated.structured_resume.schema_version == 2
+    assert "Support Engineer / Software Engineer Intern" not in (
+        migrated.optimized_resume_draft
+    )
+    assert "Support Engineer | Alpha Ltd" in migrated.optimized_resume_draft
+    assert "Software Engineer Intern | Alpha Ltd" in migrated.optimized_resume_draft
+    assert "- Resolved production incidents." in migrated.optimized_resume_draft
+    assert "- Built Python APIs." in migrated.optimized_resume_draft
 
 
 def test_structure_draft_ignores_pdf_header_separators_and_preserves_overflow() -> None:
