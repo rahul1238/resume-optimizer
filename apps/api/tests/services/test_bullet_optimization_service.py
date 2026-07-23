@@ -302,6 +302,13 @@ def test_rewrite_fidelity_rejects_rounded_metrics_and_ranges() -> None:
     ) is True
 
 
+def test_skill_detection_accepts_source_backed_architecture_phrase() -> None:
+    assert BulletOptimizationService._contains_skill(
+        "Engineered an event-driven synchronization framework.",
+        "Event-Driven Architecture",
+    )
+
+
 def test_groups_do_not_mix_bullets_between_entries() -> None:
     section = tailored_result().structured_resume.sections[0]
 

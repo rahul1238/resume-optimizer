@@ -270,6 +270,33 @@ async def export_pdf(
     )
 
 
+@router.post("/{analysis_id}/export/pdf")
+async def export_draft_pdf(
+    analysis_id: str,
+    request: ResumePreviewRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> Response:
+    context = await run_in_threadpool(
+        ResumeExportService.get_context,
+        current_user.uid,
+        analysis_id,
+    )
+    content = await run_in_threadpool(
+        ResumeExportService.to_pdf,
+        request.draft,
+        request.layout,
+    )
+    filename = ResumeExportService.export_filename(context)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
 @router.post(
     "",
     response_model=AnalysisCreateResponse,

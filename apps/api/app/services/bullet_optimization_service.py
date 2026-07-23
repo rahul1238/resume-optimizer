@@ -259,6 +259,20 @@ class BulletOptimizationService:
             acronym = "".join(word[0] for word in words if word).upper()
             if len(acronym) >= 2:
                 aliases.add(acronym)
+            core_words = [
+                word
+                for word in words
+                if word.casefold()
+                not in {
+                    "architecture",
+                    "development",
+                    "engineering",
+                    "framework",
+                    "platform",
+                }
+            ]
+            if len(core_words) >= 2:
+                aliases.add(" ".join(core_words))
         return any(
             AnalysisService._contains_keyword(normalized_text, alias)
             for alias in aliases

@@ -489,9 +489,16 @@ export async function getResumePdfPreview(
 
 export async function downloadResumeExport(
   analysisId: string,
+  draft: string,
+  layout: ResumeLayoutSettings,
 ): Promise<void> {
   const response = await authenticatedRequest(
     `/api/v1/analyses/${encodeURIComponent(analysisId)}/export/pdf`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draft, layout }),
+    },
   );
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");

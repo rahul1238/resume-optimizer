@@ -987,18 +987,11 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     setError(null);
     setExporting(true);
     try {
-      const saved = await saveImprovements(
+      await downloadResumeExport(
         analysis.analysis_id,
-        improvement.result,
-      );
-      const withLayout = await saveImprovementLayout(
-        analysis.analysis_id,
+        improvement.result.optimized_resume_draft,
         improvement.layout,
       );
-      setImprovement({ ...withLayout, result: saved.result });
-      rememberTailoredResume(withLayout, analysis);
-      setImprovementSaved(true);
-      await downloadResumeExport(analysis.analysis_id);
     } catch (caught: unknown) {
       setError(caught instanceof ApiClientError
         ? caught.message

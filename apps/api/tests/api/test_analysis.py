@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -308,3 +309,43 @@ def test_pdf_preview_renders_unsaved_draft(
     assert rendered[0][0] == "Tailored resume draft"
     assert rendered[0][1].body_size == 11
     assert rendered[0][1].margin_left == 0.7
+
+
+def test_pdf_export_renders_unsaved_draft_without_persisting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = SimpleNamespace(draft="Saved draft", layout=ResumeLayoutSettings())
+    monkeypatch.setattr(
+        ResumeExportService,
+        "get_context",
+        lambda *_args: context,
+    )
+    monkeypatch.setattr(
+        ResumeExportService,
+        "export_filename",
+        lambda _context: "Rahul_Google.pdf",
+    )
+    rendered: list[tuple[str, ResumeLayoutSettings]] = []
+
+    def to_pdf(draft: str, layout: ResumeLayoutSettings) -> bytes:
+        rendered.append((draft, layout))
+        return b"%PDF-1.7 export"
+
+    monkeypatch.setattr(ResumeExportService, "to_pdf", to_pdf)
+    response = client.post(
+        "/api/v1/analyses/analysis-id/export/pdf",
+        json={
+            "draft": "Current unsaved draft",
+            "layout": {"template": "compact", "body_size": 10.5},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="Rahul_Google.pdf"'
+    )
+    assert response.content == b"%PDF-1.7 export"
+    assert rendered[0][0] == "Current unsaved draft"
+    assert rendered[0][1].template == "compact"
+    assert rendered[0][1].body_size == 10.5
