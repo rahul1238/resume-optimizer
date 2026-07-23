@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { FileText, FolderOpen, Trash2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Navbar from "@/components/Navbar";
 import ResumeUploader from "@/components/ResumeUploader";
@@ -137,7 +138,7 @@ export default function DashboardPage() {
           {!result && <div className={styles.pageHeader}>
             <div>
               <h1 className={styles.greeting}>
-                Hey, <span className="gradient-text">{firstName}</span> 👋
+                Welcome, <span className="gradient-text">{firstName}</span>
               </h1>
               <p className={styles.greetingSub}>
                 Select your master resume, then create a focused version for each job.
@@ -189,7 +190,7 @@ export default function DashboardPage() {
                   </div>
                 ) : history.length === 0 ? (
                   <div className={styles.historyEmpty}>
-                    <div className={styles.historyEmptyIcon}>📂</div>
+                    <div className={styles.historyEmptyIcon}><FolderOpen size={28} /></div>
                     <p>No uploads yet.</p>
                     <p>Upload your complete career resume to get started.</p>
                   </div>
@@ -205,7 +206,7 @@ export default function DashboardPage() {
                         >
                           <div className={styles.historyItemLeft}>
                             <span className={styles.historyFileIcon}>
-                              {entry.resume.file_type === "pdf" ? "📄" : "📝"}
+                              <FileText size={17} />
                             </span>
                             <div className={styles.historyItemMeta}>
                               <span className={styles.historyFilename}>
@@ -232,9 +233,7 @@ export default function DashboardPage() {
                           aria-label={`Delete ${entry.resume.filename}`}
                           title="Delete resume"
                         >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" />
-                          </svg>
+                          <Trash2 size={15} />
                         </button>
                       </li>
                     ))}

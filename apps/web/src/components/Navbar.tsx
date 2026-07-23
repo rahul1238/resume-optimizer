@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
+import { FileText, LayoutDashboard, LogOut } from "lucide-react";
 import styles from "./Navbar.module.css";
 
 export default function Navbar() {
@@ -25,8 +26,8 @@ export default function Navbar() {
     <nav className={styles.nav}>
       <div className={styles.inner}>
         <Link href={user ? "/dashboard" : "/"} className={styles.logo}>
-          <span className={styles.logoIcon}>✦</span>
-          <span className="gradient-text">ResumeAI</span>
+          <span className={styles.logoIcon}><FileText size={17} /></span>
+          <span>ResumeAI</span>
         </Link>
 
         <div className={styles.actions}>
@@ -35,6 +36,7 @@ export default function Navbar() {
               {user ? (
                 <div className={styles.userArea}>
                   <Link href="/dashboard" className="btn btn-ghost btn-sm">
+                    <LayoutDashboard size={14} />
                     Dashboard
                   </Link>
                   <span className={styles.userEmail}>{user.email}</span>
@@ -44,6 +46,7 @@ export default function Navbar() {
                     className="btn btn-ghost btn-sm"
                     disabled={signingOut}
                   >
+                    <LogOut size={14} />
                     {signingOut ? "Signing out…" : "Sign out"}
                   </button>
                 </div>

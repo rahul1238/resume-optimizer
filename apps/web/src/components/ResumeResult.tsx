@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Check, Copy, FileText, RefreshCw, X } from "lucide-react";
 import { ResumeUploadResponse } from "@/lib/api";
 import styles from "./ResumeResult.module.css";
 
@@ -12,6 +13,16 @@ interface Props {
 export default function ResumeResult({ result, onReset }: Props) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  const [sourceOpen, setSourceOpen] = useState(false);
+
+  useEffect(() => {
+    if (!sourceOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSourceOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [sourceOpen]);
 
   const handleCopy = async () => {
     try {
@@ -26,95 +37,102 @@ export default function ResumeResult({ result, onReset }: Props) {
 
   return (
     <div className={`${styles.wrapper} animate-slide-up`}>
-      {/* Header */}
       <div className={styles.header}>
-        <div className={styles.titleRow}>
-          <div className={styles.fileIcon}>
-            {result.file_type === "pdf" ? "📄" : "📝"}
-          </div>
+        <div className={styles.identity}>
+          <span className={styles.fileIcon} aria-hidden="true">
+            <FileText size={18} strokeWidth={1.9} />
+          </span>
           <div className={styles.fileMeta}>
             <h3 className={styles.filename}>{result.filename}</h3>
-            <div className={styles.badges}>
-              <span className={`badge badge-${result.file_type}`}>
-                {result.file_type.toUpperCase()}
-              </span>
-              <span className="badge">Master source</span>
-              <span className="badge badge-success">✓ Parsed</span>
-            </div>
+            <p>
+              <span>Master resume</span>
+              <span>{result.file_type.toUpperCase()}</span>
+              <span className={styles.parsed}><Check size={12} /> Parsed</span>
+            </p>
           </div>
-          <button
-            id="upload-another-btn"
-            onClick={onReset}
-            className={`btn btn-ghost btn-sm ${styles.resetBtn}`}
-          >
-            Upload another
-          </button>
         </div>
 
-        {/* Stats */}
         <div className={styles.stats}>
           <div className={styles.stat}>
-            <span className={styles.statValue}>{result.character_count.toLocaleString()}</span>
-            <span className={styles.statLabel}>Characters</span>
+            <strong>{result.text.trim().split(/\s+/).length.toLocaleString()}</strong>
+            <span>words</span>
           </div>
           {result.page_count !== null && (
             <div className={styles.stat}>
-              <span className={styles.statValue}>{result.page_count}</span>
-              <span className={styles.statLabel}>{result.page_count === 1 ? "Page" : "Pages"}</span>
+              <strong>{result.page_count}</strong>
+              <span>{result.page_count === 1 ? "page" : "pages"}</span>
             </div>
           )}
           <div className={styles.stat}>
-            <span className={styles.statValue}>
-              {result.text.trim().split(/\s+/).length.toLocaleString()}
-            </span>
-            <span className={styles.statLabel}>Words</span>
+            <strong>{result.character_count.toLocaleString()}</strong>
+            <span>characters</span>
           </div>
-          <div className={`${styles.stat} ${styles.idStat}`}>
-            <span className={styles.statValue} title={result.resume_id}>
-              {result.resume_id.slice(0, 8)}…
-            </span>
-            <span className={styles.statLabel}>Resume ID</span>
-          </div>
+        </div>
+
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setSourceOpen(true)}
+          >
+            <FileText size={15} />
+            Source
+          </button>
+          <button
+            id="upload-another-btn"
+            onClick={onReset}
+            className="btn btn-ghost btn-sm"
+          >
+            <RefreshCw size={15} />
+            Change resume
+          </button>
         </div>
       </div>
 
-      {/* Extracted Text */}
-      <details className={styles.textSection}>
-        <summary className={styles.textHeader}>
-          <h4 className={styles.textTitle}>Master Resume Source Text</h4>
-          <span>View parsed content</span>
-        </summary>
-        <div className={styles.textToolbar}>
-          <button
-            id="copy-text-btn"
-            onClick={handleCopy}
-            className={`btn btn-ghost btn-sm ${styles.copyBtn}`}
+      {sourceOpen && (
+        <div className={styles.modalBackdrop} onMouseDown={() => setSourceOpen(false)}>
+          <section
+            className={styles.sourceModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="resume-source-title"
+            onMouseDown={(event) => event.stopPropagation()}
           >
-            {copied ? (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                Copied!
-              </>
-            ) : (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </svg>
-                Copy text
-              </>
+            <header className={styles.modalHeader}>
+              <div>
+                <p>Parsed master resume</p>
+                <h2 id="resume-source-title">{result.filename}</h2>
+              </div>
+              <button
+                type="button"
+                className={styles.iconButton}
+                onClick={() => setSourceOpen(false)}
+                aria-label="Close source text"
+                title="Close"
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <div className={styles.textToolbar}>
+              <span>{result.character_count.toLocaleString()} characters</span>
+              <button
+                id="copy-text-btn"
+                onClick={handleCopy}
+                className="btn btn-ghost btn-sm"
+              >
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+                {copied ? "Copied" : "Copy text"}
+              </button>
+            </div>
+            <pre className={styles.textContent}>{result.text}</pre>
+            {copyError && (
+              <p className={styles.copyError} role="alert">
+                Could not copy the text. Select it manually and try again.
+              </p>
             )}
-          </button>
+          </section>
         </div>
-        <pre className={styles.textContent}>{result.text}</pre>
-        {copyError && (
-          <p className={styles.copyError} role="alert">
-            Could not copy the text. Select it manually and try again.
-          </p>
-        )}
-      </details>
+      )}
     </div>
   );
 }

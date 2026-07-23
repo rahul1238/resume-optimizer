@@ -2,6 +2,13 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import {
+  Download,
+  RefreshCw,
+  Save,
+  Trash2,
+  WandSparkles,
+} from "lucide-react";
+import {
   ApiClientError,
   ATSScan,
   BulletOptimizationProposal,
@@ -670,6 +677,36 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     } : current);
   };
 
+  const updateStructuredBullet = (
+    sectionId: string,
+    itemIndex: number,
+    value: string,
+  ) => {
+    setImprovementSaved(false);
+    setImprovement((current) => {
+      const document = current?.result.structured_resume;
+      if (!current || !document) return current;
+      const sections = document.sections.map((section) => {
+        if (section.section_id !== sectionId) return section;
+        return {
+          ...section,
+          items: section.items.map((item, index) => (
+            index === itemIndex ? `- ${value.replace(/^\s*[-*•]\s*/, "")}` : item
+          )),
+        };
+      });
+      const structuredResume = { ...document, sections };
+      return {
+        ...current,
+        result: {
+          ...current.result,
+          structured_resume: structuredResume,
+          optimized_resume_draft: serializeResume(structuredResume),
+        },
+      };
+    });
+  };
+
   const updateBulletSetting = (
     key: string,
     currentCount: number,
@@ -895,9 +932,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                 aria-label={`Delete analysis for ${item.job_title || "untitled job"}`}
                 title="Delete analysis"
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" />
-                </svg>
+                <Trash2 size={15} />
               </button>
             </li>
           ))}
@@ -1008,6 +1043,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
             className="btn btn-ghost btn-sm"
             onClick={() => setAnalysis(null)}
           >
+            <RefreshCw size={14} />
             New analysis
           </button>
         </header>
@@ -1073,7 +1109,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
               >
                 {improvementLoading
                   ? <><span className="spinner spinner-sm" /> Generating…</>
-                  : "Generate improvements"}
+                  : <><WandSparkles size={14} /> Generate improvements</>}
               </button>
             )}
           </div>
@@ -1231,6 +1267,32 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                                 </button>
                               </div>
                             </div>
+                            <details className={styles.bulletEditor}>
+                              <summary>
+                                Review and edit {group.bullets.length} bullets
+                              </summary>
+                              <div className={styles.bulletEditorList}>
+                                {group.bullets.map((bullet, bulletIndex) => (
+                                  <label
+                                    key={`${key}:bullet:${group.itemIndices[bulletIndex]}`}
+                                    className={styles.bulletEditorRow}
+                                  >
+                                    <span>{bulletIndex + 1}</span>
+                                    <textarea
+                                      className="form-input"
+                                      value={bullet.replace(/^\s*[-*•]\s*/, "")}
+                                      onChange={(event) => updateStructuredBullet(
+                                        section.section_id,
+                                        group.itemIndices[bulletIndex],
+                                        event.target.value,
+                                      )}
+                                      maxLength={1000}
+                                      aria-label={`Edit bullet ${bulletIndex + 1} for ${group.entryLabel}`}
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                            </details>
                             {proposal && (
                               <div className={styles.bulletProposal}>
                                 <p>{proposal.rationale}</p>
@@ -1536,10 +1598,12 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                     <span className={styles.savedStatus} role="status">Saved</span>
                   ) : (
                     <button type="button" className="btn btn-ghost btn-sm" onClick={handleSaveImprovements} disabled={improvementSaving || !improvement.result.optimized_resume_draft.trim()}>
+                      {!improvementSaving && <Save size={14} />}
                       {improvementSaving ? "Saving…" : "Save draft"}
                     </button>
                   )}
                   <button type="button" className="btn btn-primary btn-sm" onClick={handleExport} disabled={exporting || !improvement.result.optimized_resume_draft.trim()}>
+                    {!exporting && <Download size={14} />}
                     {exporting ? "Preparing…" : "Download PDF"}
                   </button>
                 </div>

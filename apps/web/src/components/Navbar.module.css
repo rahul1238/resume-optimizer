@@ -2,9 +2,9 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(7, 11, 18, 0.85);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -12,28 +12,31 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  max-width: 1200px;
+  max-width: 1920px;
   margin: 0 auto;
   padding: 0 24px;
-  height: 64px;
+  height: 54px;
 }
 
 .logo {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 1.2rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-weight: 750;
+  letter-spacing: 0;
 }
 
 .logoIcon {
-  font-size: 1rem;
-  background: var(--grad-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: float 3s ease-in-out infinite;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  color: #ffffff;
+  background: var(--color-info);
 }
 
 .actions {

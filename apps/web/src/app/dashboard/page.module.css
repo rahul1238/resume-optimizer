@@ -1,8 +1,75 @@
 .page {
+  --color-bg: #eef1f5;
+  --color-bg-2: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-2: #f8f9fb;
+  --color-border: #dde2e8;
+  --color-border-hover: #bcc5d0;
+  --color-text: #17202e;
+  --color-text-muted: #526070;
+  --color-text-faint: #7c8998;
+  --color-success: #16835e;
+  --color-error: #c9384f;
+  --color-warning: #b66a09;
+  --color-info: #2563eb;
+  --grad-primary: #2563eb;
+  --grad-accent: #16835e;
+  --grad-subtle: #eef4ff;
+  --glow-primary: none;
+  --glow-sm: none;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-elevated: 0 18px 50px rgba(15, 23, 42, 0.18);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  color: var(--color-text);
   background: var(--color-bg);
+}
+
+.page :global(h1),
+.page :global(h2),
+.page :global(h3),
+.page :global(h4),
+.page :global(h5),
+.page :global(h6) {
+  letter-spacing: 0;
+}
+
+.page :global(.glass-card) {
+  background: var(--color-surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: var(--shadow-card);
+}
+
+.page :global(.btn) {
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  box-shadow: none;
+  transform: none;
+}
+
+.page :global(.btn-primary) {
+  background: #2563eb;
+}
+
+.page :global(.btn-primary:hover:not(:disabled)) {
+  background: #1d4ed8;
+  box-shadow: none;
+  transform: none;
+}
+
+.page :global(.form-input) {
+  border-color: var(--color-border);
+  color: var(--color-text);
+  background: var(--color-surface);
 }
 
 .loadingPage {
@@ -18,11 +85,11 @@
 
 .main {
   flex: 1;
-  padding: 48px 0 80px;
+  padding: 36px 0 64px;
 }
 
 .mainActive {
-  padding: 20px 0 32px;
+  padding: 12px 0 18px;
 }
 
 /* ── Page Header ── */
@@ -83,8 +150,9 @@
 }
 
 .workspaceContainer {
-  width: min(1800px, calc(100% - 32px));
-  max-width: 1800px;
+  width: min(1920px, calc(100% - 24px));
+  max-width: 1920px;
+  padding: 0;
 }
 
 .layoutActive {
@@ -178,9 +246,9 @@
 }
 
 .historyEmptyIcon {
-  font-size: 2.5rem;
+  display: inline-flex;
   margin-bottom: 4px;
-  opacity: 0.5;
+  color: var(--color-text-faint);
 }
 
 .historyList {
@@ -259,7 +327,8 @@
 }
 
 .historyFileIcon {
-  font-size: 1.2rem;
+  display: inline-flex;
+  color: var(--color-info);
   flex-shrink: 0;
 }
 
