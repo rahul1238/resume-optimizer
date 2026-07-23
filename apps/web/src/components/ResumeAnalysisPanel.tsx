@@ -112,6 +112,102 @@ interface BulletGroup {
   bullets: string[];
 }
 
+interface DiffWord {
+  value: string;
+  unchanged: boolean;
+}
+
+function wordDiff(original: string, proposed: string): {
+  original: DiffWord[];
+  proposed: DiffWord[];
+} {
+  const left = original.replace(/^\s*[-*•]\s*/, "").split(/\s+/).filter(Boolean);
+  const right = proposed.replace(/^\s*[-*•]\s*/, "").split(/\s+/).filter(Boolean);
+  const lengths = Array.from(
+    { length: left.length + 1 },
+    () => Array<number>(right.length + 1).fill(0),
+  );
+  for (let leftIndex = left.length - 1; leftIndex >= 0; leftIndex -= 1) {
+    for (let rightIndex = right.length - 1; rightIndex >= 0; rightIndex -= 1) {
+      lengths[leftIndex][rightIndex] = left[leftIndex] === right[rightIndex]
+        ? lengths[leftIndex + 1][rightIndex + 1] + 1
+        : Math.max(
+          lengths[leftIndex + 1][rightIndex],
+          lengths[leftIndex][rightIndex + 1],
+        );
+    }
+  }
+
+  const unchangedLeft = new Set<number>();
+  const unchangedRight = new Set<number>();
+  let leftIndex = 0;
+  let rightIndex = 0;
+  while (leftIndex < left.length && rightIndex < right.length) {
+    if (left[leftIndex] === right[rightIndex]) {
+      unchangedLeft.add(leftIndex);
+      unchangedRight.add(rightIndex);
+      leftIndex += 1;
+      rightIndex += 1;
+    } else if (
+      lengths[leftIndex + 1][rightIndex] >= lengths[leftIndex][rightIndex + 1]
+    ) {
+      leftIndex += 1;
+    } else {
+      rightIndex += 1;
+    }
+  }
+  return {
+    original: left.map((value, index) => ({
+      value,
+      unchanged: unchangedLeft.has(index),
+    })),
+    proposed: right.map((value, index) => ({
+      value,
+      unchanged: unchangedRight.has(index),
+    })),
+  };
+}
+
+function BulletDiff({
+  original,
+  proposed,
+}: {
+  original: string;
+  proposed: string;
+}) {
+  const diff = wordDiff(original, proposed);
+  return (
+    <div className={styles.bulletDiff}>
+      <div>
+        <span>Original</span>
+        <p>
+          {diff.original.map((word, index) => (
+            <mark
+              key={`original:${index}`}
+              className={word.unchanged ? styles.diffUnchanged : styles.diffRemoved}
+            >
+              {word.value}{" "}
+            </mark>
+          ))}
+        </p>
+      </div>
+      <div>
+        <span>Rewrite</span>
+        <p>
+          {diff.proposed.map((word, index) => (
+            <mark
+              key={`proposed:${index}`}
+              className={word.unchanged ? styles.diffUnchanged : styles.diffAdded}
+            >
+              {word.value}{" "}
+            </mark>
+          ))}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function bulletGroups(items: string[]): BulletGroup[] {
   const groups: BulletGroup[] = [];
   let pendingHeader: string[] = [];
@@ -226,10 +322,13 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
   const [exporting, setExporting] = useState(false);
   const [layoutSaving, setLayoutSaving] = useState(false);
   const [bulletProposal, setBulletProposal] = useState<BulletOptimizationProposal | null>(null);
+  const [confirmedSkillIntegrations, setConfirmedSkillIntegrations] = useState<Set<string>>(
+    new Set(),
+  );
   const [bulletLoadingKey, setBulletLoadingKey] = useState<string | null>(null);
   const [bulletSettings, setBulletSettings] = useState<Record<string, {
     targetCount: number;
-    mode: "prioritize" | "consolidate" | "expand";
+    mode: "prioritize" | "consolidate" | "expand" | "rewrite";
   }>>({});
   const [reviewView, setReviewView] = useState<ReviewView>("roles");
   const [draftView, setDraftView] = useState<"preview" | "edit">("preview");
@@ -712,7 +811,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     currentCount: number,
     update: Partial<{
       targetCount: number;
-      mode: "prioritize" | "consolidate" | "expand";
+      mode: "prioritize" | "consolidate" | "expand" | "rewrite";
     }>,
   ) => {
     setBulletSettings((previous) => {
@@ -740,12 +839,14 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
     setBulletLoadingKey(key);
     setError(null);
     try {
-      setBulletProposal(await proposeBulletOptimization(analysis.analysis_id, {
+      const proposal = await proposeBulletOptimization(analysis.analysis_id, {
         section_id: sectionId,
         group_index: group.groupIndex,
         target_count: setting.targetCount,
         mode: setting.mode,
-      }));
+      });
+      setConfirmedSkillIntegrations(new Set());
+      setBulletProposal(proposal);
     } catch (caught: unknown) {
       setError(caught instanceof ApiClientError
         ? ANALYSIS_ERRORS[caught.code] ?? caught.message
@@ -763,11 +864,21 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
       if (!current || !document) return current;
       const replacedIndices = new Set(bulletProposal.item_indices);
       const firstIndex = Math.min(...bulletProposal.item_indices);
+      const proposedBullets = bulletProposal.proposed_bullets.map((bullet, index) => {
+        const integration = bulletProposal.skill_integrations.find(
+          (item) => item.bullet_index === index
+            && confirmedSkillIntegrations.has(item.suggestion_id),
+        );
+        return integration?.suggested_bullet ?? bullet;
+      });
+      const confirmedSkills = bulletProposal.skill_integrations
+        .filter((item) => confirmedSkillIntegrations.has(item.suggestion_id))
+        .flatMap((item) => item.skills);
       const sections = document.sections.map((section) => {
         if (section.section_id !== bulletProposal.section_id) return section;
         const items: string[] = [];
         section.items.forEach((item, index) => {
-          if (index === firstIndex) items.push(...bulletProposal.proposed_bullets);
+          if (index === firstIndex) items.push(...proposedBullets);
           if (!replacedIndices.has(index)) items.push(item);
         });
         return { ...section, items };
@@ -787,9 +898,16 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
               status: "accepted" as const,
               target_section: bulletProposal.entry_label.slice(0, 120),
               original: bulletProposal.original_bullets.join("\n").slice(0, 1500),
-              suggested: bulletProposal.proposed_bullets.join("\n").slice(0, 1500),
+              suggested: proposedBullets.join("\n").slice(0, 1500),
               reason: bulletProposal.rationale.slice(0, 500),
-              evidence: bulletProposal.original_bullets.slice(0, 5),
+              evidence: [
+                ...bulletProposal.original_bullets,
+                ...(confirmedSkills.length > 0
+                  ? [`User confirmed skill usage: ${[
+                    ...new Set(confirmedSkills),
+                  ].join(", ")}`]
+                  : []),
+              ].slice(0, 5),
               confidence: 0.9,
               requires_confirmation: false,
             },
@@ -798,6 +916,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
       };
     });
     setBulletProposal(null);
+    setConfirmedSkillIntegrations(new Set());
   };
 
   const updateLayout = <K extends keyof ResumeLayoutSettings>(
@@ -1217,6 +1336,7 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                                     min={1}
                                     max={12}
                                     value={setting.targetCount}
+                                    disabled={setting.mode === "rewrite"}
                                     onChange={(event) => updateBulletSetting(
                                       key,
                                       group.bullets.length,
@@ -1247,10 +1367,15 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                                         mode: event.target.value as
                                           | "prioritize"
                                           | "consolidate"
-                                          | "expand",
+                                          | "expand"
+                                          | "rewrite",
+                                        targetCount: event.target.value === "rewrite"
+                                          ? group.bullets.length
+                                          : setting.targetCount,
                                       },
                                     )}
                                   >
+                                    <option value="rewrite">Rewrite for JD</option>
                                     <option value="prioritize">Prioritize</option>
                                     <option value="consolidate">Consolidate</option>
                                     <option value="expand">Expand</option>
@@ -1261,9 +1386,16 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                                   className="btn btn-ghost btn-sm"
                                   onClick={() => handleBulletProposal(section.section_id, group)}
                                   disabled={bulletLoadingKey !== null
-                                    || setting.targetCount === group.bullets.length}
+                                    || (
+                                      setting.mode !== "rewrite"
+                                      && setting.targetCount === group.bullets.length
+                                    )}
                                 >
-                                  {bulletLoadingKey === key ? "Generating…" : "Propose"}
+                                  {bulletLoadingKey === key
+                                    ? "Generating…"
+                                    : setting.mode === "rewrite"
+                                      ? "Rewrite"
+                                      : "Propose"}
                                 </button>
                               </div>
                             </div>
@@ -1296,23 +1428,81 @@ export default function ResumeAnalysisPanel({ resumeId }: Props) {
                             {proposal && (
                               <div className={styles.bulletProposal}>
                                 <p>{proposal.rationale}</p>
-                                <ul>
-                                  {proposal.proposed_bullets.map((bullet, index) => (
-                                    <li key={`${proposal.proposal_id}:${index}`}>
-                                      {bullet.replace(/^\s*[-*•]\s+/, "")}
-                                    </li>
-                                  ))}
-                                </ul>
+                                {proposal.mode === "rewrite" ? (
+                                  <div className={styles.bulletDiffList}>
+                                    {proposal.proposed_bullets.map((bullet, index) => {
+                                      const integration = proposal.skill_integrations.find(
+                                        (item) => item.bullet_index === index
+                                          && confirmedSkillIntegrations.has(
+                                            item.suggestion_id,
+                                          ),
+                                      );
+                                      return (
+                                        <BulletDiff
+                                          key={`${proposal.proposal_id}:${index}`}
+                                          original={proposal.original_bullets[index] ?? ""}
+                                          proposed={integration?.suggested_bullet ?? bullet}
+                                        />
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <ul>
+                                    {proposal.proposed_bullets.map((bullet, index) => (
+                                      <li key={`${proposal.proposal_id}:${index}`}>
+                                        {bullet.replace(/^\s*[-*•]\s+/, "")}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
                                 {proposal.lost_keywords.length > 0 && (
                                   <div className={styles.keywordWarning} role="alert">
                                     Missing protected keywords: {proposal.lost_keywords.join(", ")}
+                                  </div>
+                                )}
+                                {proposal.skill_integrations.length > 0 && (
+                                  <div className={styles.skillIntegrations}>
+                                    <strong>Confirm technology usage</strong>
+                                    <p>
+                                      These skills exist in your resume, but their use in this
+                                      achievement must be confirmed.
+                                    </p>
+                                    {proposal.skill_integrations.map((integration) => (
+                                      <label key={integration.suggestion_id}>
+                                        <input
+                                          type="checkbox"
+                                          checked={confirmedSkillIntegrations.has(
+                                            integration.suggestion_id,
+                                          )}
+                                          onChange={(event) => {
+                                            setConfirmedSkillIntegrations((current) => {
+                                              const next = new Set(current);
+                                              if (event.target.checked) {
+                                                next.add(integration.suggestion_id);
+                                              } else {
+                                                next.delete(integration.suggestion_id);
+                                              }
+                                              return next;
+                                            });
+                                          }}
+                                        />
+                                        <span>
+                                          <b>{integration.skills.join(", ")}</b>
+                                          {" · "}
+                                          {integration.reason}
+                                        </span>
+                                      </label>
+                                    ))}
                                   </div>
                                 )}
                                 <div className={styles.proposalActions}>
                                   <button
                                     type="button"
                                     className="btn btn-ghost btn-sm"
-                                    onClick={() => setBulletProposal(null)}
+                                    onClick={() => {
+                                      setBulletProposal(null);
+                                      setConfirmedSkillIntegrations(new Set());
+                                    }}
                                   >
                                     Dismiss
                                   </button>

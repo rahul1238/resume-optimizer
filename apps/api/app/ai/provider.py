@@ -57,4 +57,5 @@ class AIProvider(Protocol):
         mode: str,
         job_description: str,
         protected_keywords: list[str],
+        candidate_skills: list[str],
     ) -> BulletOptimizationResult: ...

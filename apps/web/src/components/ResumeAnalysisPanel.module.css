@@ -751,7 +751,7 @@
 }
 
 .bulletControls select {
-  width: 106px;
+  width: 128px;
 }
 
 .bulletControls input,
@@ -792,6 +792,97 @@
   font-size: 0.68rem;
 }
 
+.bulletDiffList {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.bulletDiff {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.bulletDiff > div {
+  min-width: 0;
+  padding: 9px 10px;
+}
+
+.bulletDiff > div + div {
+  border-left: 1px solid var(--color-border);
+}
+
+.bulletDiff span {
+  color: var(--color-text-faint);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.bulletDiff p {
+  margin-top: 5px;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  line-height: 1.55;
+}
+
+.bulletDiff mark {
+  color: inherit;
+}
+
+.diffUnchanged {
+  background: transparent;
+}
+
+.diffRemoved {
+  background: rgba(248, 113, 113, 0.18);
+  text-decoration: line-through;
+  text-decoration-color: rgba(248, 113, 113, 0.8);
+}
+
+.diffAdded {
+  background: rgba(52, 211, 153, 0.2);
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.2);
+}
+
+.skillIntegrations {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: var(--radius-sm);
+  background: rgba(96, 165, 250, 0.06);
+}
+
+.skillIntegrations > strong {
+  color: var(--color-text);
+  font-size: 0.72rem;
+}
+
+.skillIntegrations > p {
+  color: var(--color-text-faint);
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
+.skillIntegrations label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.skillIntegrations input {
+  margin-top: 2px;
+  accent-color: var(--color-primary);
+}
+
 .proposalActions {
   display: flex;
   justify-content: flex-end;
@@ -807,6 +898,15 @@
 
   .bulletControls {
     flex-wrap: wrap;
+  }
+
+  .bulletDiff {
+    grid-template-columns: 1fr;
+  }
+
+  .bulletDiff > div + div {
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
   }
 }
 

@@ -24,9 +24,20 @@ class OptimizedBullet(BaseModel):
     source_indices: list[int] = Field(min_length=1, max_length=12)
 
 
+class SkillIntegrationSuggestion(BaseModel):
+    bullet_index: int = Field(ge=0, le=11)
+    skills: list[str] = Field(min_length=1, max_length=6)
+    suggested_text: str = Field(min_length=1, max_length=1200)
+    reason: str = Field(min_length=1, max_length=500)
+
+
 class BulletOptimizationResult(BaseModel):
     bullets: list[OptimizedBullet] = Field(min_length=1, max_length=12)
     rationale: str = Field(min_length=1, max_length=800)
+    skill_integrations: list[SkillIntegrationSuggestion] = Field(
+        default_factory=list,
+        max_length=6,
+    )
 
 
 class StructuredResumeSection(BaseModel):

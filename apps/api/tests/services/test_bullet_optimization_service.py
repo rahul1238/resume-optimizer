@@ -4,6 +4,7 @@ from app.ai.schemas import (
     BulletOptimizationResult,
     OptimizedBullet,
     ResumeAnalysisResult,
+    SkillIntegrationSuggestion,
     StructuredResumeDocument,
     StructuredResumeSection,
 )
@@ -29,7 +30,15 @@ def tailored_result():
                         "Support Engineer | Earlier Co | 2020-2022",
                         "- Resolved customer incidents.",
                     ],
-                )
+                ),
+                StructuredResumeSection(
+                    section_id="section-skills",
+                    heading="SKILLS",
+                    items=[
+                        "Languages: Python, Java",
+                        "Automation: n8n, R",
+                    ],
+                ),
             ],
         )
     )
@@ -46,7 +55,11 @@ def analysis_result() -> ResumeAnalysisResult:
     )
 
 
-def configure(monkeypatch, optimized: BulletOptimizationResult) -> None:
+def configure(
+    monkeypatch,
+    optimized: BulletOptimizationResult,
+    calls: dict | None = None,
+) -> None:
     monkeypatch.setattr(ImprovementService, "get", lambda *_args: object())
     monkeypatch.setattr(
         ImprovementService,
@@ -61,7 +74,12 @@ def configure(monkeypatch, optimized: BulletOptimizationResult) -> None:
             result=analysis_result().model_dump(),
         ),
     )
-    provider = SimpleNamespace(optimize_bullets=lambda **_kwargs: optimized)
+    def optimize_bullets(**kwargs):
+        if calls is not None:
+            calls.update(kwargs)
+        return optimized
+
+    provider = SimpleNamespace(optimize_bullets=optimize_bullets)
     monkeypatch.setattr(service_module, "get_ai_provider", lambda: provider)
 
 
@@ -124,6 +142,62 @@ def test_proposal_blocks_when_supported_keyword_is_lost(monkeypatch) -> None:
 
     assert proposal.can_apply is False
     assert proposal.lost_keywords == ["Python", "FastAPI"]
+
+
+def test_rewrite_keeps_count_and_surfaces_confirmed_skill_candidates(
+    monkeypatch,
+) -> None:
+    calls: dict = {}
+    configure(
+        monkeypatch,
+        BulletOptimizationResult(
+            bullets=[
+                OptimizedBullet(
+                    text="Built job-aligned Python and FastAPI services.",
+                    source_indices=[0],
+                ),
+                OptimizedBullet(
+                    text="Strengthened API reliability through automated testing.",
+                    source_indices=[1],
+                ),
+                OptimizedBullet(
+                    text="Reduced deployment time by 40%.",
+                    source_indices=[2],
+                ),
+            ],
+            skill_integrations=[
+                SkillIntegrationSuggestion(
+                    bullet_index=1,
+                    skills=["n8n"],
+                    suggested_text=(
+                        "Strengthened API reliability through n8n-based automation "
+                        "and testing."
+                    ),
+                    reason="Confirm that n8n powered this automation.",
+                )
+            ],
+            rationale="Rewrites each bullet for the target role.",
+        ),
+        calls,
+    )
+
+    proposal = BulletOptimizationService.propose(
+        "user-id",
+        "analysis-id",
+        "section-experience",
+        0,
+        3,
+        "rewrite",
+    )
+
+    assert proposal.mode == "rewrite"
+    assert proposal.target_count == len(proposal.original_bullets)
+    assert calls["candidate_skills"] == ["Python", "Java", "n8n", "R"]
+    assert proposal.skill_integrations[0].skills == ["n8n"]
+    assert "n8n-based automation" in (
+        proposal.skill_integrations[0].suggested_bullet
+    )
+    assert proposal.can_apply is True
 
 
 def test_groups_do_not_mix_bullets_between_entries() -> None:

@@ -1,5 +1,5 @@
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 from uuid import uuid4
 
@@ -17,6 +17,15 @@ class BulletOptimizationError(AIProviderError):
 
 
 @dataclass(frozen=True)
+class SkillIntegrationProposal:
+    suggestion_id: str
+    bullet_index: int
+    skills: list[str]
+    suggested_bullet: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class BulletOptimizationProposal:
     proposal_id: str
     section_id: str
@@ -26,10 +35,11 @@ class BulletOptimizationProposal:
     original_bullets: list[str]
     proposed_bullets: list[str]
     target_count: int
-    mode: Literal["prioritize", "consolidate", "expand"]
+    mode: Literal["prioritize", "consolidate", "expand", "rewrite"]
     protected_keywords: list[str]
     lost_keywords: list[str]
     rationale: str
+    skill_integrations: list[SkillIntegrationProposal] = field(default_factory=list)
 
     @property
     def can_apply(self) -> bool:
@@ -47,7 +57,7 @@ class BulletOptimizationService:
         section_id: str,
         group_index: int,
         target_count: int,
-        mode: Literal["prioritize", "consolidate", "expand"],
+        mode: Literal["prioritize", "consolidate", "expand", "rewrite"],
     ) -> BulletOptimizationProposal:
         improvement = ImprovementService.get(owner_uid, analysis_id)
         result = ImprovementService.result(improvement)
@@ -68,9 +78,13 @@ class BulletOptimizationService:
         if group_index < 0 or group_index >= len(groups):
             raise BulletOptimizationError("The selected bullet group no longer exists.")
         entry_label, item_indices, source_bullets = groups[group_index]
-        if target_count == len(source_bullets):
+        if target_count == len(source_bullets) and mode != "rewrite":
             raise BulletOptimizationError(
                 "Choose a different bullet count to create a proposal."
+            )
+        if mode == "rewrite" and target_count != len(source_bullets):
+            raise BulletOptimizationError(
+                "JD rewriting keeps the current bullet count."
             )
 
         analysis = AnalysisRepository.get_owned(analysis_id, owner_uid)
@@ -90,12 +104,14 @@ class BulletOptimizationService:
             )
         ]
         provider = get_ai_provider()
+        candidate_skills = cls._candidate_skills(document)
         optimized = provider.optimize_bullets(
             source_bullets=source_bullets,
             target_count=target_count,
             mode=mode,
             job_description=analysis.job_description,
             protected_keywords=protected_keywords,
+            candidate_skills=candidate_skills,
         )
         if len(optimized.bullets) != target_count:
             raise AIProviderError("The bullet service returned an unexpected count.")
@@ -116,6 +132,32 @@ class BulletOptimizationService:
             for keyword in protected_keywords
             if not AnalysisService._contains_keyword(normalized_proposal, keyword)
         ]
+        verified_skills = {skill.casefold(): skill for skill in candidate_skills}
+        skill_integrations: list[SkillIntegrationProposal] = []
+        seen_bullet_indices: set[int] = set()
+        for suggestion in optimized.skill_integrations if mode == "rewrite" else []:
+            if (
+                suggestion.bullet_index >= len(proposed_bullets)
+                or suggestion.bullet_index in seen_bullet_indices
+            ):
+                continue
+            skills = [
+                verified_skills[skill.casefold()]
+                for skill in suggestion.skills
+                if skill.casefold() in verified_skills
+            ]
+            if not skills:
+                continue
+            seen_bullet_indices.add(suggestion.bullet_index)
+            skill_integrations.append(
+                SkillIntegrationProposal(
+                    suggestion_id=str(uuid4()),
+                    bullet_index=suggestion.bullet_index,
+                    skills=list(dict.fromkeys(skills)),
+                    suggested_bullet=f"- {suggestion.suggested_text.strip()}",
+                    reason=suggestion.reason.strip(),
+                )
+            )
         return BulletOptimizationProposal(
             proposal_id=str(uuid4()),
             section_id=section_id,
@@ -128,8 +170,24 @@ class BulletOptimizationService:
             mode=mode,
             protected_keywords=protected_keywords,
             lost_keywords=lost_keywords,
+            skill_integrations=skill_integrations,
             rationale=optimized.rationale,
         )
+
+    @staticmethod
+    def _candidate_skills(document) -> list[str]:
+        skills: list[str] = []
+        for section in document.sections:
+            if "skill" not in section.heading.casefold():
+                continue
+            for item in section.items:
+                value = re.sub(r"^[^:]{1,40}:\s*", "", item)
+                skills.extend(
+                    part.strip()
+                    for part in re.split(r"[,|;/]", value)
+                    if part.strip() and len(part.strip()) <= 50
+                )
+        return list(dict.fromkeys(skills))[:40]
 
     @classmethod
     def groups(cls, items: list[str]) -> list[tuple[str, list[int], list[str]]]:

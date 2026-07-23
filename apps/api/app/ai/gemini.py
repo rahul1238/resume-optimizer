@@ -241,6 +241,7 @@ RESUME
         mode: str,
         job_description: str,
         protected_keywords: list[str],
+        candidate_skills: list[str],
     ) -> BulletOptimizationResult:
         numbered = "\n".join(
             f"{index}. {bullet}" for index, bullet in enumerate(source_bullets)
@@ -253,9 +254,22 @@ bullet must cite one or more zero-based source indices. The mode is {mode}:
 - consolidate: combine overlapping source bullets while preserving distinct facts.
 - expand: split compound source bullets into narrower bullets without adding or
   duplicating facts. Cite the source bullet for every split result.
+- rewrite: keep the same number of bullets and rewrite each achievement for the
+  job description and ATS clarity. Use strong action verbs, natural job keywords,
+  and concise outcome-first language. Add a job keyword directly only when the
+  source bullet already supports it.
 Preserve these currently supported job keywords when they remain truthful:
 {", ".join(protected_keywords) or "None"}
-Do not add bullet markers to the returned text.
+Candidate-wide verified skills:
+{", ".join(candidate_skills) or "None"}
+Do not assume a candidate-wide skill was used for a particular achievement. When
+mode is rewrite and a verified skill could plausibly clarify an achievement but
+the source bullet does not prove that link, keep it out of the direct rewrite and
+return a skill_integrations suggestion instead. Each suggestion must identify the
+zero-based OUTPUT bullet_index, use only skills from the verified list, provide a
+complete suggested_text version of that bullet, and explain what the candidate
+must confirm. Return at most one integration suggestion per output bullet.
+Do not add bullet markers to returned text or suggested_text.
 
 JOB DESCRIPTION
 ---

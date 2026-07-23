@@ -208,9 +208,16 @@ export interface BulletOptimizationProposal {
   original_bullets: string[];
   proposed_bullets: string[];
   target_count: number;
-  mode: "prioritize" | "consolidate" | "expand";
+  mode: "prioritize" | "consolidate" | "expand" | "rewrite";
   protected_keywords: string[];
   lost_keywords: string[];
+  skill_integrations: Array<{
+    suggestion_id: string;
+    bullet_index: number;
+    skills: string[];
+    suggested_bullet: string;
+    reason: string;
+  }>;
   rationale: string;
   can_apply: boolean;
 }
@@ -445,7 +452,7 @@ export async function proposeBulletOptimization(
     section_id: string;
     group_index: number;
     target_count: number;
-    mode: "prioritize" | "consolidate" | "expand";
+    mode: "prioritize" | "consolidate" | "expand" | "rewrite";
   },
 ): Promise<BulletOptimizationProposal> {
   const response = await authenticatedRequest(
